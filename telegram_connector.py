@@ -6,8 +6,6 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-POLLING_INTERVAL_SECONDS = 2
-
 last_received_update_id = 0
 
 def send_telegram_message(message: str) -> None:
@@ -21,32 +19,30 @@ def send_telegram_message(message: str) -> None:
 	)
 
 # TODO: convert to webhook
-def listen_telegram_messages() -> list[dict]:
+def read_telegram_messages() -> list[dict]:
 	global last_received_update_id
-
-	sleep(POLLING_INTERVAL_SECONDS)
 
 	token = os.getenv("TELEGRAM_TOKEN")
 	response = requests.get(
 		f"https://api.telegram.org/bot{token}/getUpdates",
-		params={"offset": last_received_update_id + 1, "timeout": 30},
+		params={"offset": last_received_update_id + 1, "timeout": 1},
 		timeout=35,
 	)
 	updates = response.json()["result"]
 
-	if updates:
+	if updates and len(updates) > 0:
 		last_received_update_id = updates[-1]["update_id"]
 
 	return [
-		update["message"]
+		update["message"]["text"]
 		for update in updates
 		if "message" in update and "text" in update["message"]
 	]
 	
-
+ 
 if __name__ == "__main__":
     send_telegram_message("Sending messages to Telegram is working!")
     while True:
-        messages = listen_telegram_messages()
+        messages = read_telegram_messages()
         for message in messages:
-            print(f"Received message from Telegram: {message['text']}")
+            print(f"Received message from Telegram: {message}")

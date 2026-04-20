@@ -13,7 +13,7 @@ last_heartbeat = now
 delta_time = 0
 
 def heartbeat() -> bool:
-    global last_heartbeat, delta_time
+    global now, last_heartbeat, delta_time
     now = time.time()
     delta_time = now - last_heartbeat
     if delta_time >= heartbeat_interval_seconds:
@@ -27,9 +27,10 @@ if __name__ == "__main__":
     while True:
         time.sleep(1)
         if heartbeat():
+            
+            # Read telegram messages and process commands
             messages = read_telegram_messages()
             if messages:
-                print(f"Received message from Telegram: {messages}")
                 for message in messages:
                     if "/delete" in message:
                         task_id = int(message.split("/delete")[1].strip())
@@ -39,5 +40,13 @@ if __name__ == "__main__":
                         add_task(time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), task)
                     if "/list" in message:
                         tasks = read_tasks()
-                        task_list = "\n".join([f"{task['id']}: {task['task']}" for task in tasks])
+                        task_list = "\n".join([f"{task['id']}. [{task['timestamp']}] {task['task']}" for task in tasks])
                         send_telegram_message(f"Current tasks:\n{task_list}")
+
+            # Read tasks and execute if in time
+            tasks = read_tasks()
+            for task in tasks:
+                task_time = time.mktime(time.strptime(task["timestamp"], "%Y-%m-%dT%H:%M:%SZ"))
+                if now >= task_time:
+                    send_telegram_message(f"Executing task: {task['task']}")
+                    delete_task(task["id"])

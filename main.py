@@ -6,7 +6,7 @@ load_dotenv()
 
 from telegram_connector import send_telegram_message, read_telegram_messages
 from taskbook_connector import add_task, delete_task, read_tasks
-from llm_connector import prompt
+from agent import prompt
 
 
 heartbeat_interval_seconds = int(os.getenv("HEARTBEAT_INTERVAL_SECONDS", 10))

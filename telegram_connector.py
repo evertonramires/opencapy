@@ -11,6 +11,10 @@ last_received_update_id = 0
 def send_telegram_message(message: str) -> None:
 	token = os.getenv("TELEGRAM_TOKEN")
 	chat_id = os.getenv("TELEGRAM_CHAT_ID")
+ 
+	if len(message) > 4000:
+		message = message[:3980] + "\n\n(...truncated)"
+		print("[System] Message truncated to fit Telegram limits.")
 
 	requests.post(
 		f"https://api.telegram.org/bot{token}/sendMessage",

@@ -1,4 +1,8 @@
-# opencapy
+# Open Capy
+
+[![Support my work ❤️](https://img.shields.io/badge/Support%20my%20work%20❤️-orange?style=for-the-badge&logo=patreon&logoColor=white)](https://www.patreon.com/c/evertonics)
+
+This is a bare minimum AI agentic harness I created after giving up on openclaw cronjob not working properly. Main intent is to keep as simple as possible to be used as boiler plate for other agentic projects in the future.
 
 ## Install
 
@@ -11,6 +15,8 @@ cp IDENTITY.md.EXAMPLE IDENTITY.md
 ```
 
 ## Run
+
+Adjust .env and IDENTITY.md as wanted and then run:
 
 ```bash
 uv run main.py

@@ -4,6 +4,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from telegram_connector import send_telegram_message, read_telegram_messages
+from taskbook_connector import add_task, delete_task, read_tasks
 
 
 heartbeat_interval_seconds = int(os.getenv("HEARTBEAT_INTERVAL_SECONDS", 10))
@@ -29,3 +30,14 @@ if __name__ == "__main__":
             messages = read_telegram_messages()
             if messages:
                 print(f"Received message from Telegram: {messages}")
+                for message in messages:
+                    if "/delete" in message:
+                        task_id = int(message.split("/delete")[1].strip())
+                        delete_task(task_id)
+                    if "/add" in message:
+                        task = message.split("/add")[1].strip()
+                        add_task(time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), task)
+                    if "/list" in message:
+                        tasks = read_tasks()
+                        task_list = "\n".join([f"{task['id']}: {task['task']}" for task in tasks])
+                        send_telegram_message(f"Current tasks:\n{task_list}")

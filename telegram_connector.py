@@ -19,7 +19,7 @@ def send_telegram_message(message: str) -> None:
 	)
 
 # TODO: convert to webhook
-def read_telegram_messages() -> list[dict]:
+def read_telegram_messages() -> list[str]:
 	global last_received_update_id
 
 	token = os.getenv("TELEGRAM_TOKEN")

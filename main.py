@@ -30,6 +30,16 @@ def heartbeat() -> bool:
     return False
 
 if __name__ == "__main__":
+    # if IDENTITY.md and .env doesn't exist, create them with default content
+    if not os.path.exists("IDENTITY.md"):
+        print("[System] IDENTITY.md not found, creating with default content. Make sure to update it later!")
+        with open("IDENTITY.md.EXAMPLE") as src, open("IDENTITY.md", "w") as dst:
+            dst.write(src.read())
+    if not os.path.exists(".env"):
+        print("[System] .env not found, creating with default content. Make sure to update it later!")
+        with open(".env.EXAMPLE") as src, open(".env", "w") as dst:
+            dst.write(src.read())
+    
     register_telegram_commands()
     print("[System] Ready to work!")
     send_telegram_message("[System] Ready to work!")
@@ -101,6 +111,8 @@ if __name__ == "__main__":
                                 send_telegram_message(f"New identity:\n{identity}")
                             except Exception as e:
                                 send_telegram_message(f"Sorry, I couldn't update the identity, can we try again? Details: {e}")
+                        elif "/model" in message:
+                            send_telegram_message(os.getenv("LLM_MODEL", "unknown"))
                         else:
                             response = prompt(f"User said: {message}")
                             send_telegram_message(response)

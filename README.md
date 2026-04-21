@@ -4,6 +4,11 @@
 
 This is a bare minimum AI agentic harness I created after giving up on openclaw cronjob not working properly. Main intent is to keep as simple as possible to be used as boiler plate for other agentic projects in the future.
 
+## Requirements
+
+- LM Studio or OpenAI API compatible API
+- Tool calling capable model loaded
+
 ## Install
 
 ```bash

@@ -35,6 +35,10 @@
         {
             "command": "writeidentity",
             "description": "Update the entire identity information"
+        },
+        {
+            "command": "model",
+            "description": "Get the current model being used"
         }
     ]
 }

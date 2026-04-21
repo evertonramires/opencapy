@@ -20,6 +20,8 @@ def send_telegram_message(message: str) -> None:
 
 	token = os.getenv("TELEGRAM_TOKEN")
 	chat_id = os.getenv("TELEGRAM_CHAT_ID")
+	if not token or not chat_id:
+		return
  
 	if len(message) > 4000:
 		message = message[:3980] + "\n\n(...truncated)"
@@ -32,6 +34,8 @@ def send_telegram_message(message: str) -> None:
 	)
 
 def send_telegram_typing_action() -> None:
+	if not os.getenv("TELEGRAM_TOKEN") or not os.getenv("TELEGRAM_CHAT_ID"):
+		return
 	global _typing_stop_event
 	if _typing_stop_event:
 		_typing_stop_event.set()
@@ -53,6 +57,8 @@ def send_telegram_typing_action() -> None:
 
 def register_telegram_commands() -> None:
 	token = os.getenv("TELEGRAM_TOKEN")
+	if not token:
+		return
 	with open("telegram_commands.json") as f:
 		commands = json.load(f)
 	requests.post(
@@ -66,6 +72,8 @@ def read_telegram_messages() -> list[str]:
 	global last_received_update_id
 
 	token = os.getenv("TELEGRAM_TOKEN")
+	if not token:
+		return []
 	response = requests.get(
 		f"https://api.telegram.org/bot{token}/getUpdates",
 		params={"offset": last_received_update_id + 1, "timeout": 1},

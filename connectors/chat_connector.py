@@ -6,6 +6,7 @@ from connectors.identity_connector import read_identity, write_identity
 from connectors.tools_connector import list_tools
 from connectors.clock_connector import get_time
 from connectors.taskbook_connector import add_task, delete_task, read_tasks
+from connectors.routines_connector import add_routine, delete_routine, read_routines
 from agent import prompt
 
 def register_commands():
@@ -46,6 +47,30 @@ def read_messages():
                     send_message(f"Task {task_id} deleted.")
                 except Exception as e:
                     send_message(f"Sorry, I couldn't delete the task, can we try again? Details: {e}")
+            elif "/addroutine" in message:
+                try:
+                    routine_text = message.split("/addroutine")[1].strip()
+                    current_time = get_time("utc")
+                    llm_response = prompt(f"Current time: {current_time}\nExtract a recurring routine from: \"{routine_text}\"\nReply with exactly three lines:\nTASK: <task description>\nSTART_TIME: <ISO8601 UTC timestamp>\nINTERVAL_SECONDS: <integer seconds>")
+                    task = llm_response.split("TASK:")[1].split("\n")[0].strip()
+                    start_time = llm_response.split("START_TIME:")[1].split("\n")[0].strip()
+                    interval = int(llm_response.split("INTERVAL_SECONDS:")[1].strip().split("\n")[0].strip())
+                    add_routine_response = add_routine(start_time, interval, task)
+                    print(add_routine_response)
+                    send_message(add_routine_response)
+                except Exception as e:
+                    send_message(f"Sorry, I couldn't add the routine, can we try again? Details: {e}")
+            elif "/listroutines" in message:
+                routines = read_routines()
+                routine_list = "\n".join([f"[{r['start_time']} every {r['interval']}s] {r['id']}. {r['task']}" for r in routines])
+                send_message(f"🔁 Current routines:\n{routine_list}")
+            elif "/deleteroutine" in message:
+                try:
+                    routine_id = int(message.split("/deleteroutine")[1].strip())
+                    delete_routine(routine_id)
+                    send_message(f"Routine {routine_id} deleted.")
+                except Exception as e:
+                    send_message(f"Sorry, I couldn't delete the routine, can we try again? Details: {e}")
             elif "/addnote" in message:
                 try:
                     note_text = message.split("/addnote")[1].strip()

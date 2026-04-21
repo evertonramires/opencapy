@@ -7,6 +7,7 @@ load_dotenv()
 
 from connectors.clock_connector import get_time
 from connectors.taskbook_connector import delete_task, read_tasks
+from connectors.routines_connector import read_routines
 from agent import prompt
 from connectors.chat_connector import register_commands, send_message, read_messages
 
@@ -58,6 +59,12 @@ if __name__ == "__main__":
                         response = prompt(f"Task: {task['task']}")
                         send_message(f"🕰️ {response}")
                         delete_task(task["id"])
+                routines = read_routines()
+                for routine in routines:
+                    routine_start = calendar.timegm(time.strptime(routine["start_time"], "%Y-%m-%dT%H:%M:%SZ"))
+                    if now >= routine_start and (now - routine_start) % routine["interval"] < heartbeat_interval_seconds:
+                        response = prompt(f"Routine: {routine['task']}")
+                        send_message(f"🔁 {response}")
         except Exception as e:
             print(f"⚠️ {e}\n 🔵 Continuing execution...")
             send_message(f"⚠️ {e}\n 🔵 Continuing execution...")

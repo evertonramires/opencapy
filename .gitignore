@@ -1,7 +1,6 @@
 .env
 __pycache__/
 .venv
-hood/taskbook.json
-hood/memory.json
-hood/notebook.md
+hood/
+!hood/empty
 IDENTITY.md

@@ -13,6 +13,18 @@
             "description": "Delete a task by ID. Example: /deletetask 1"
         },
         {
+            "command": "addroutine",
+            "description": "Add a recurring routine. Example: /addroutine Take medication every day at 8am"
+        },
+        {
+            "command": "listroutines",
+            "description": "List all routines"
+        },
+        {
+            "command": "deleteroutine",
+            "description": "Delete a routine by ID. Example: /deleteroutine 1"
+        },
+        {
             "command": "addnote",
             "description": "Add a new note. Example: /addnote Remember to call mom"
         },

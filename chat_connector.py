@@ -1,6 +1,6 @@
 import os
 from api_connector import send_api_message, read_api_messages
-from telegram_connector import send_telegram_message, read_telegram_messages
+from telegram_connector import send_telegram_message, read_telegram_messages, send_telegram_typing_action
 from api_connector import send_api_message, read_api_messages
 from notebook_connector import add_note, delete_note, read_notes
 from identity_connector import read_identity, write_identity
@@ -19,6 +19,7 @@ def read_messages():
     messages.extend(read_api_messages())
     
     if messages:
+        send_telegram_typing_action()
         for message in messages:
             if "/addtask" in message:
                 try:
@@ -35,7 +36,7 @@ def read_messages():
             elif "/listtasks" in message:
                 tasks = read_tasks()
                 task_list = "\n".join([f"[{task['timestamp']}] {task['id']}. {task['task']}" for task in tasks])
-                send_message(f"Current tasks:\n{task_list}")
+                send_message(f"📑 Current tasks:\n{task_list}")
             elif "/deletetask" in message:
                 try:
                     task_id = int(message.split("/deletetask")[1].strip())
@@ -54,7 +55,7 @@ def read_messages():
                     send_message(f"Sorry, I couldn't add the note, can we try again? Details: {e}")
             elif "/listnotes" in message:
                 notes = read_notes()
-                send_message(f"Current notes:\n{notes}")
+                send_message(f"📔 Current notes:\n{notes}")
             elif "/deletenote" in message:
                 try:
                     note_id = int(message.split("/deletenote")[1].strip())

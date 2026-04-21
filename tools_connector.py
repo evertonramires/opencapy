@@ -1,8 +1,8 @@
 import os
 import importlib.util
-from chat_connector import send_message
 
 def notify_tool_use(message: str) -> None:
+    from chat_connector import send_message
     print(message)
     send_message(message)
     
@@ -20,7 +20,7 @@ def list_tools() -> str:
                 continue
             spec.loader.exec_module(module)
             module_tools = [v for k, v in vars(module).items() if k.endswith("_tool") and isinstance(v, dict)]
-            human_readable_tools += f"{name}:\n"
+            human_readable_tools += f"\n🪛 {name}:\n"
             for tool in module_tools:
                 fn = tool["function"]
                 human_readable_tools += f"- {fn['name']} - {fn['description']}\n"

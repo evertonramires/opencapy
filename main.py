@@ -30,17 +30,17 @@ def heartbeat() -> bool:
 if __name__ == "__main__":
     # if IDENTITY.md and .env doesn't exist, create them with default content
     if not os.path.exists("IDENTITY.md"):
-        print("[System] IDENTITY.md not found, creating with default content. Make sure to update it later!")
+        print("⚙️ IDENTITY.md not found, creating with default content. Make sure to update it later!")
         with open("IDENTITY.md.EXAMPLE") as src, open("IDENTITY.md", "w") as dst:
             dst.write(src.read())
     if not os.path.exists(".env"):
-        print("[System] .env not found, creating with default content. Make sure to update it later!")
+        print("⚙️ .env not found, creating with default content. Make sure to update it later!")
         with open(".env.EXAMPLE") as src, open(".env", "w") as dst:
             dst.write(src.read())
     
     register_telegram_commands()
-    print("[System] Ready to work!")
-    send_message("[System] Ready to work!")
+    print("🟢 Ready to work!")
+    send_message("🟢 Ready to work!")
     while True:
         try:
             time.sleep(1)
@@ -52,7 +52,8 @@ if __name__ == "__main__":
                     task_time = calendar.timegm(time.strptime(task["timestamp"], "%Y-%m-%dT%H:%M:%SZ"))
                     if now >= task_time:
                         response = prompt(f"Task: {task['task']}")
-                        send_message(f"[Task] {response}")
+                        send_message(f"🕰️ {response}")
                         delete_task(task["id"])
         except Exception as e:
-            print(f"[Error] {e}\n Continuing execution...")
+            print(f"⚠️ {e}\n 🔵 Continuing execution...")
+            send_message(f"⚠️ {e}\n 🔵 Continuing execution...")

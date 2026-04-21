@@ -16,7 +16,7 @@ def add_task(timestamp, task) -> str:
     data.append({"id": next_id, "timestamp": timestamp, "task": task})
     with open(TASKBOOK_PATH, "w") as f:
         json.dump({"tasks": data}, f, indent=4)
-    return f"[System] Task added: {next_id}. {task} at {timestamp}"
+    return f"⚙️ Task added: {next_id}. {task} at {timestamp}"
 def read_tasks():
     _ensure_taskbook()
     with open(TASKBOOK_PATH) as f:

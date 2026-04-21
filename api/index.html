@@ -86,7 +86,7 @@
     .bubble {
       padding: 8px 12px;
       border-radius: 18px;
-      font-size: 14px;
+      font-size: 15px;
       line-height: 1.5;
       word-break: break-word;
       white-space: pre-wrap;
@@ -133,7 +133,7 @@
       background: #f3f0ff;
       border-radius: 22px;
       padding: 10px 16px;
-      font-size: 14px;
+      font-size: 15px;
       outline: none;
       color: #1a1a2e;
       resize: none;
@@ -159,7 +159,7 @@
     <div id="header-avatar"></div>
     <div>
       <div id="header-name">Capy</div>
-      <!-- <div id="header-status">online</div> -->
+      <div id="header-status">online</div>
     </div>
   </div>
 
@@ -184,6 +184,7 @@
     const sendBtn = document.getElementById("send-btn");
     const apiBase = "";
 
+    const statusEl = document.getElementById("header-status");
     const stored = JSON.parse(localStorage.getItem("chat") || "[]");
     for (const m of stored) addMessage(m.text, m.who, false);
 
@@ -221,6 +222,7 @@
       const res = await fetch(`${apiBase}/outbox`);
       const data = await res.json();
       for (const msg of data.messages) addMessage(msg, "bot");
+      if (data.messages.length > 0) statusEl.textContent = "online";
     }
 
     function submit() {
@@ -229,6 +231,7 @@
       addMessage(text, "user");
       input.value = "";
       input.style.height = "auto";
+      statusEl.textContent = "typing...";
       sendMessage(text);
     }
 

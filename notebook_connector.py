@@ -13,7 +13,7 @@ def add_note(timestamp, note) -> str:
     with open(NOTEBOOK_PATH, "a") as f:
         f.write(f"- {next_id}. [{timestamp}] {note}\n")
     prune_notes()
-    return f"[System] Note added: {next_id}. {note} at {timestamp}"
+    return f"⚙️ Note added: {next_id}. {note} at {timestamp}"
 
 def read_notes() -> str:
     _ensure_notebook()

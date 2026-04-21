@@ -16,7 +16,7 @@ def add_memory(timestamp, memory, person) -> str:
     data.append({"id": next_id, "timestamp": timestamp, "memory": memory, "person": person})
     with open(MEMORY_PATH, "w") as f:
         json.dump({"memory": data}, f, indent=4)
-    return f"[System] Memory added: {next_id}. {memory} at {timestamp}"
+    return f"⚙️ Memory added: {next_id}. {memory} at {timestamp}"
 def read_memory():
     _ensure_memory()
     with open(MEMORY_PATH) as f:

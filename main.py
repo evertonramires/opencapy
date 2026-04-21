@@ -56,14 +56,14 @@ if __name__ == "__main__":
                 for task in tasks:
                     task_time = calendar.timegm(time.strptime(task["timestamp"], "%Y-%m-%dT%H:%M:%SZ"))
                     if now >= task_time:
-                        response = prompt(f"This task just triggered, if it requires a tool, execute, if not, treat as a notification to the user: {task['task']}")
+                        response = prompt(f"[system] This task just triggered, if it requires a tool, execute, if not, treat as a notification to the user: {task['task']}")
                         send_message(f"🕰️ {response}")
                         delete_task(task["id"])
                 routines = read_routines()
                 for routine in routines:
                     routine_start = calendar.timegm(time.strptime(routine["start_time"], "%Y-%m-%dT%H:%M:%SZ"))
                     if now >= routine_start and (now - routine_start) % routine["interval"] < heartbeat_interval_seconds:
-                        response = prompt(f"This routine just triggered, if it requires a tool, execute, if not, treat as a notification to the user: {routine['task']}")
+                        response = prompt(f"[system] This routine just triggered, if it requires a tool, execute, if not, treat as a notification to the user: {routine['task']}")
                         send_message(f"🔁 {response}")
         except Exception as e:
             print(f"⚠️ {e}\n 🔵 Continuing execution...")

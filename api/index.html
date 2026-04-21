@@ -200,8 +200,18 @@
     const apiBase = "";
 
     const statusEl = document.getElementById("header-status");
-    const stored = JSON.parse(localStorage.getItem("chat") || "[]");
-    for (const m of stored) addMessage(m.text, m.who, false, m.time || "");
+
+    async function loadHistory() {
+      const res = await fetch(`${apiBase}/memory`);
+      const data = await res.json();
+      for (const m of data.memory) {
+        if (m.memory.startsWith("[system]")) continue;
+        const who = m.person === "user" ? "user" : "bot";
+        const ts = new Date(m.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+        addMessage(m.memory.replace(/^User said: /, ""), who, false, ts);
+      }
+    }
+    loadHistory();
 
     function addMessage(text, who, save = true, time = null) {
       const ts = time || new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
@@ -224,11 +234,6 @@
       row.appendChild(bubble);
       messages.appendChild(row);
       messages.scrollTop = messages.scrollHeight;
-
-      if (save) {
-        stored.push({ text, who, time: ts });
-        localStorage.setItem("chat", JSON.stringify(stored));
-      }
     }
 
     async function sendMessage(text) {

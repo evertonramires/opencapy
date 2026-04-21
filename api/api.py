@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 from fastapi.responses import FileResponse
 from fastapi import FastAPI
@@ -43,3 +44,8 @@ def client_read():
     messages = list(outgoing_queue)
     outgoing_queue.clear()
     return {"messages": messages}
+
+@app.get("/memory")
+def get_memory():
+    memory_path = base_dir.parent / "hood" / "memory.json"
+    return json.loads(memory_path.read_text())

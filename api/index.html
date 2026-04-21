@@ -103,6 +103,13 @@
       border-bottom-right-radius: 4px;
       box-shadow: 0 1px 4px rgba(109,40,217,0.25);
     }
+    .bubble .ts {
+      display: block;
+      font-size: 11px;
+      opacity: 0.55;
+      margin-top: 4px;
+      text-align: right;
+    }
 
     /* Date separator */
     .date-sep {
@@ -186,9 +193,10 @@
 
     const statusEl = document.getElementById("header-status");
     const stored = JSON.parse(localStorage.getItem("chat") || "[]");
-    for (const m of stored) addMessage(m.text, m.who, false);
+    for (const m of stored) addMessage(m.text, m.who, false, m.time || "");
 
-    function addMessage(text, who, save = true) {
+    function addMessage(text, who, save = true, time = null) {
+      const ts = time || new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
       const row = document.createElement("div");
       row.className = `message ${who}`;
 
@@ -199,13 +207,18 @@
       bubble.className = "bubble";
       bubble.textContent = text;
 
+      const tsEl = document.createElement("span");
+      tsEl.className = "ts";
+      tsEl.textContent = ts;
+      bubble.appendChild(tsEl);
+
       row.appendChild(avatar);
       row.appendChild(bubble);
       messages.appendChild(row);
       messages.scrollTop = messages.scrollHeight;
 
       if (save) {
-        stored.push({ text, who });
+        stored.push({ text, who, time: ts });
         localStorage.setItem("chat", JSON.stringify(stored));
       }
     }

@@ -1,10 +1,12 @@
 from pathlib import Path
 from fastapi.responses import FileResponse
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 app = FastAPI()
 base_dir = Path(__file__).resolve().parent
+app.mount("/assets", StaticFiles(directory=base_dir / "assets"), name="assets")
 
 incoming_queue: list[str] = []  # messages from client to bot
 outgoing_queue: list[str] = []  # messages from bot to client

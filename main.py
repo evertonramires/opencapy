@@ -4,6 +4,7 @@ import calendar
 from dotenv import load_dotenv
 load_dotenv()
 
+from clock_connector import get_time
 from telegram_connector import send_telegram_message, read_telegram_messages
 from taskbook_connector import add_task, delete_task, read_tasks
 from notebook_connector import add_note, delete_note, read_notes
@@ -11,13 +12,14 @@ from agent import prompt
 
 
 heartbeat_interval_seconds = int(os.getenv("HEARTBEAT_INTERVAL_SECONDS", 10))
-now = time.time()
+    
+now = int(get_time("timestamp"))
 last_heartbeat = now
 delta_time = 0
 
 def heartbeat() -> bool:
     global now, last_heartbeat, delta_time
-    now = time.time()
+    now = int(get_time("timestamp"))
     delta_time = now - last_heartbeat
     if delta_time >= heartbeat_interval_seconds:
         last_heartbeat = now
@@ -40,7 +42,7 @@ if __name__ == "__main__":
                         if "/addtask" in message:
                             try:
                                 task_text = message.split("/addtask")[1].strip()
-                                current_time = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+                                current_time = get_time("utc")
                                 llm_response = prompt(f"Current time: {current_time}\nExtract a task and scheduled timestamp from: \"{task_text}\"\nReply with exactly two lines:\nTASK: <task description>\nTIMESTAMP: <ISO8601 UTC timestamp>")
                                 task = llm_response.split("TASK:")[1].split("\n")[0].strip()
                                 timestamp = llm_response.split("TIMESTAMP:")[1].strip().split("\n")[0].strip()
@@ -63,7 +65,7 @@ if __name__ == "__main__":
                         elif "/addnote" in message:
                             try:
                                 note_text = message.split("/addnote")[1].strip()
-                                current_time = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+                                current_time = get_time("utc")
                                 add_note_response = add_note(current_time, note_text)
                                 print(add_note_response)
                                 send_telegram_message(add_note_response)

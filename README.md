@@ -75,3 +75,5 @@ Misc:
 
 With chat API running, navigate to:
 [http://localhost:8000/docs](http://localhost:8000/docs)
+
+> Disclaimer: This is a bare minimum project, bring your own security layer.

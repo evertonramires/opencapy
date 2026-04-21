@@ -8,7 +8,7 @@ from clock_connector import get_time
 from telegram_connector import register_telegram_commands
 from taskbook_connector import delete_task, read_tasks
 from agent import prompt
-from chat_interface import send_message, read_messages
+from chat_connector import send_message, read_messages
 
 
 heartbeat_interval_seconds = int(os.getenv("HEARTBEAT_INTERVAL_SECONDS", 10))

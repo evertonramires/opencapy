@@ -1,10 +1,10 @@
 import os
 import importlib.util
-from telegram_connector import send_telegram_message
+from chat_connector import send_message
 
 def notify_tool_use(message: str) -> None:
     print(message)
-    send_telegram_message(message)
+    send_message(message)
     
 def list_tools() -> str:
     tools_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "tools")

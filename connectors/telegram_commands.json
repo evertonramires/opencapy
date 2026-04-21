@@ -55,6 +55,14 @@
         {
             "command": "help",
             "description": "Get the content of the README.md file"
+        },
+        {
+            "command": "whitelist",
+            "description": "Add a URL or domain to the internet whitelist. Example: /whitelist https://example.com"
+        },
+        {
+            "command": "blacklist",
+            "description": "Remove a URL or domain from the internet whitelist. Example: /blacklist https://example.com"
         }
     ]
 }

@@ -7,6 +7,7 @@ from connectors.tools_connector import list_tools
 from connectors.clock_connector import get_time
 from connectors.taskbook_connector import add_task, delete_task, read_tasks
 from connectors.routines_connector import add_routine, delete_routine, read_routines
+from connectors.whitelist_connector import add_to_whitelist, remove_from_whitelist
 from agent import prompt
 
 def register_commands():
@@ -107,6 +108,23 @@ def read_messages():
                     send_message(f"New identity:\n{identity}")
                 except Exception as e:
                     send_message(f"Sorry, I couldn't update the identity, can we try again? Details: {e}")
+            elif "/whitelist" in message:
+                try:
+                    raw = message.split("/whitelist")[1].strip()
+                    domain = add_to_whitelist(raw)
+                    send_message(f"✅ {domain} added to whitelist.")
+                except Exception as e:
+                    send_message(f"Sorry, I couldn't add to the whitelist, can we try again? Details: {e}")
+            elif "/blacklist" in message:
+                try:
+                    raw = message.split("/blacklist")[1].strip()
+                    domain = remove_from_whitelist(raw)
+                    if domain:
+                        send_message(f"🗑️ {domain} removed from whitelist.")
+                    else:
+                        send_message(f"Domain already not existent in whitelist.")
+                except Exception as e:
+                    send_message(f"Sorry, I couldn't remove from the whitelist, can we try again? Details: {e}")
             elif "/model" in message:
                 send_message(os.getenv("LLM_MODEL", "unknown"))
             elif "/help" in message:

@@ -8,6 +8,7 @@ from clock_connector import get_time
 from telegram_connector import send_telegram_message, read_telegram_messages, register_telegram_commands
 from taskbook_connector import add_task, delete_task, read_tasks
 from notebook_connector import add_note, delete_note, read_notes
+from identity_connector import read_identity, write_identity
 from tools_connector import list_tools
 from agent import prompt
 
@@ -86,6 +87,20 @@ if __name__ == "__main__":
                         elif "/listtools" in message:
                             tools = list_tools()
                             send_telegram_message(tools)
+                        elif "/readidentity" in message:
+                            identity = read_identity()
+                            send_telegram_message(identity)
+                        elif "/writeidentity" in message:
+                            try:
+                                identity_content = message.split("/writeidentity")[1].strip()
+                                if not identity_content:
+                                    send_telegram_message("Identity content cannot be empty. Try typing the entire command followed by the new identity content in the same line.")
+                                    continue
+                                write_identity(identity_content)
+                                identity = read_identity()
+                                send_telegram_message(f"New identity:\n{identity}")
+                            except Exception as e:
+                                send_telegram_message(f"Sorry, I couldn't update the identity, can we try again? Details: {e}")
                         else:
                             response = prompt(f"User said: {message}")
                             send_telegram_message(response)

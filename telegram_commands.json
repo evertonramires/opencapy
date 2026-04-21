@@ -27,6 +27,14 @@
         {
             "command": "listtools",
             "description": "List all available tools"
+        },
+        {
+            "command": "readidentity",
+            "description": "Read the current identity information"
+        },
+        {
+            "command": "writeidentity",
+            "description": "Update the entire identity information"
         }
     ]
 }

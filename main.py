@@ -113,6 +113,14 @@ if __name__ == "__main__":
                                 send_telegram_message(f"Sorry, I couldn't update the identity, can we try again? Details: {e}")
                         elif "/model" in message:
                             send_telegram_message(os.getenv("LLM_MODEL", "unknown"))
+                        elif "/help" in message:
+                            try:
+                                # Prints README.md content
+                                with open("README.md") as f:
+                                    readme_content = f.read()
+                                send_telegram_message(readme_content)
+                            except Exception as e:
+                                send_telegram_message(f"Sorry, I couldn't read the README file, can we try again? Details: {e}")
                         else:
                             response = prompt(f"User said: {message}")
                             send_telegram_message(response)

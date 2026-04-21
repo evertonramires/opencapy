@@ -39,6 +39,10 @@
         {
             "command": "model",
             "description": "Get the current model being used"
+        },
+        {
+            "command": "help",
+            "description": "Get the content of the README.md file"
         }
     ]
 }

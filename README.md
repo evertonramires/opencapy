@@ -48,3 +48,25 @@ Notes:
 /listnotes - list all notes
 /deletenote 3 - delete note with id 3
 ```
+
+Tools:
+
+```code
+/listtools - list all available tools
+```
+
+Identity:
+
+```code
+/readidentity - read the current identity information
+/writeidentity <content> - update the entire identity information
+```
+
+Misc:
+
+```code
+/model - get the current model being used
+/help - get the content of this README file
+```
+
+

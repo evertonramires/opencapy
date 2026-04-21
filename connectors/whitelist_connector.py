@@ -35,3 +35,8 @@ def remove_from_whitelist(raw: str) -> str | None:
     with open(_whitelist_path, "w") as f:
         json.dump(whitelist, f, indent=4)
     return domain
+
+def read_whitelist() -> list[str]:
+    _ensure_whitelist()
+    with open(_whitelist_path) as f:
+        return json.load(f)

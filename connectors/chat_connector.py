@@ -7,7 +7,7 @@ from connectors.tools_connector import list_tools
 from connectors.clock_connector import get_time
 from connectors.taskbook_connector import add_task, delete_task, read_tasks
 from connectors.routines_connector import add_routine, delete_routine, read_routines
-from connectors.whitelist_connector import add_to_whitelist, remove_from_whitelist
+from connectors.whitelist_connector import add_to_whitelist, remove_from_whitelist, read_whitelist
 from agent import prompt
 
 def register_commands():
@@ -125,6 +125,9 @@ def read_messages():
                         send_message(f"Domain already not existent in whitelist.")
                 except Exception as e:
                     send_message(f"Sorry, I couldn't remove from the whitelist, can we try again? Details: {e}")
+            elif "/listwhitelist" in message:
+                whitelist = read_whitelist()
+                send_message(f"📝 Whitelist:\n" + "\n".join(whitelist) if whitelist else "📝 Whitelist is empty.")
             elif "/model" in message:
                 send_message(os.getenv("LLM_MODEL", "unknown"))
             elif "/help" in message:

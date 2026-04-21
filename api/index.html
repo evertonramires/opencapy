@@ -184,7 +184,10 @@
     const sendBtn = document.getElementById("send-btn");
     const apiBase = "";
 
-    function addMessage(text, who) {
+    const stored = JSON.parse(localStorage.getItem("chat") || "[]");
+    for (const m of stored) addMessage(m.text, m.who, false);
+
+    function addMessage(text, who, save = true) {
       const row = document.createElement("div");
       row.className = `message ${who}`;
 
@@ -199,6 +202,11 @@
       row.appendChild(bubble);
       messages.appendChild(row);
       messages.scrollTop = messages.scrollHeight;
+
+      if (save) {
+        stored.push({ text, who });
+        localStorage.setItem("chat", JSON.stringify(stored));
+      }
     }
 
     async function sendMessage(text) {

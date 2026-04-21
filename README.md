@@ -29,7 +29,9 @@ uv run main.py
 
 ## Use
 
-Just chat around or use one of the commands below.
+1) Use telegram bot or
+2) Navigate to [Chat Page](http://localhost:8000/) and
+3) Just chat around or use one of the commands below.
 
 ### Commands
 

@@ -1,13 +1,20 @@
+from pathlib import Path
+from fastapi.responses import FileResponse
 from fastapi import FastAPI
 from pydantic import BaseModel
 
 app = FastAPI()
+base_dir = Path(__file__).resolve().parent
 
 incoming_queue: list[str] = []  # messages from client to bot
 outgoing_queue: list[str] = []  # messages from bot to client
 
 class MessageRequest(BaseModel):
     message: str
+    
+@app.get("/")
+def index():
+    return FileResponse(base_dir / "index.html")
 
 # Client sends a message to the bot
 @app.post("/inbox")

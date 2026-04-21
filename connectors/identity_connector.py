@@ -1,6 +1,6 @@
 import os
 
-IDENTITY_PATH = os.path.join(os.path.dirname(__file__), "IDENTITY.md")
+IDENTITY_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "IDENTITY.md")
 
 def _ensure_identity():
     if not os.path.exists(IDENTITY_PATH):

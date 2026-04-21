@@ -1,7 +1,7 @@
 import json
 import os
 
-TASKBOOK_PATH = os.path.join(os.path.dirname(__file__), "hood", "taskbook.json")
+TASKBOOK_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "hood", "taskbook.json")
 
 def _ensure_taskbook():
     if not os.path.exists(TASKBOOK_PATH):

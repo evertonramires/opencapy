@@ -1,11 +1,11 @@
 import os
-from api_connector import send_api_message, read_api_messages
-from telegram_connector import send_telegram_message, read_telegram_messages, send_telegram_typing_action, register_telegram_commands
-from notebook_connector import add_note, delete_note, read_notes
-from identity_connector import read_identity, write_identity
-from tools_connector import list_tools
-from clock_connector import get_time
-from taskbook_connector import add_task, delete_task, read_tasks
+from connectors.api_connector import send_api_message, read_api_messages
+from connectors.telegram_connector import send_telegram_message, read_telegram_messages, send_telegram_typing_action, register_telegram_commands
+from connectors.notebook_connector import add_note, delete_note, read_notes
+from connectors.identity_connector import read_identity, write_identity
+from connectors.tools_connector import list_tools
+from connectors.clock_connector import get_time
+from connectors.taskbook_connector import add_task, delete_task, read_tasks
 from agent import prompt
 
 def register_commands():

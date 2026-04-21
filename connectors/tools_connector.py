@@ -2,12 +2,12 @@ import os
 import importlib.util
 
 def notify_tool_use(message: str) -> None:
-    from chat_connector import send_message
+    from connectors.chat_connector import send_message
     print(message)
     send_message(message)
     
 def list_tools() -> str:
-    tools_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "tools")
+    tools_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "tools")
     human_readable_tools = ""
     for filename in os.listdir(tools_dir):
         if filename.endswith("_tool.py"):

@@ -5,10 +5,10 @@ import subprocess
 from dotenv import load_dotenv
 load_dotenv()
 
-from clock_connector import get_time
-from taskbook_connector import delete_task, read_tasks
+from connectors.clock_connector import get_time
+from connectors.taskbook_connector import delete_task, read_tasks
 from agent import prompt
-from chat_connector import register_commands, send_message, read_messages
+from connectors.chat_connector import register_commands, send_message, read_messages
 
 
 heartbeat_interval_seconds = int(os.getenv("HEARTBEAT_INTERVAL_SECONDS", 10))

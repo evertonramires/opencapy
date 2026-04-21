@@ -1,9 +1,9 @@
 import importlib.util
 import os
 
-from llm_connector import prompt_model
-from memory_connector import add_memory, read_memory, prune_memory
-from clock_connector import get_time as connector_get_time
+from connectors.llm_connector import prompt_model
+from connectors.memory_connector import add_memory, read_memory, prune_memory
+from connectors.clock_connector import get_time as connector_get_time
 
 identity_path = os.path.join(os.path.dirname(__file__), "IDENTITY.md")
 memory_length_messages = int(os.getenv("MEMORY_LENGTH_MESSAGES", 5))

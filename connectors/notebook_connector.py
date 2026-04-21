@@ -1,6 +1,6 @@
 import os
 
-NOTEBOOK_PATH = os.path.join(os.path.dirname(__file__), "hood", "notebook.md")
+NOTEBOOK_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "hood", "notebook.md")
 
 def _ensure_notebook():
     if not os.path.exists(NOTEBOOK_PATH):

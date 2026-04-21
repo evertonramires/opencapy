@@ -1,5 +1,5 @@
-from tools_connector import notify_tool_use
-from clock_connector import get_time as connector_get_time
+from connectors.tools_connector import notify_tool_use
+from connectors.clock_connector import get_time as connector_get_time
 
 def get_time(format: str) -> str | int:
     notify_tool_use(f"🪛⌚ clock_tool.get_time called")

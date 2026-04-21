@@ -1,5 +1,5 @@
-from tools_connector import notify_tool_use
-from notebook_connector import add_note as add_note_connector, read_notes as read_notes_connector, delete_note as delete_note_connector
+from connectors.tools_connector import notify_tool_use
+from connectors.notebook_connector import add_note as add_note_connector, read_notes as read_notes_connector, delete_note as delete_note_connector
 
 def add_note(timestamp: str, note: str) -> str:
     notify_tool_use(f"🪛📔➕ notebook_tool.add_note called")

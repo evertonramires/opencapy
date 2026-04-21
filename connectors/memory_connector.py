@@ -1,7 +1,7 @@
 import json
 import os
 
-MEMORY_PATH = os.path.join(os.path.dirname(__file__), "hood", "memory.json")
+MEMORY_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "hood", "memory.json")
 
 def _ensure_memory():
     if not os.path.exists(MEMORY_PATH):

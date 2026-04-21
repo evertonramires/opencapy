@@ -8,6 +8,7 @@ from clock_connector import get_time
 from telegram_connector import send_telegram_message, read_telegram_messages, register_telegram_commands
 from taskbook_connector import add_task, delete_task, read_tasks
 from notebook_connector import add_note, delete_note, read_notes
+from tools_connector import list_tools
 from agent import prompt
 
 
@@ -82,7 +83,9 @@ if __name__ == "__main__":
                                 send_telegram_message(f"Note {note_id} deleted.")
                             except Exception as e:
                                 send_telegram_message(f"Sorry, I couldn't delete the note, can we try again? Details: {e}")
-                        
+                        elif "/listtools" in message:
+                            tools = list_tools()
+                            send_telegram_message(tools)
                         else:
                             response = prompt(f"User said: {message}")
                             send_telegram_message(response)

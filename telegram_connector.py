@@ -1,6 +1,6 @@
+import json
 import os
 import requests
-from time import sleep
 
 from dotenv import load_dotenv
 
@@ -19,6 +19,16 @@ def send_telegram_message(message: str) -> None:
 	requests.post(
 		f"https://api.telegram.org/bot{token}/sendMessage",
 		json={"chat_id": chat_id, "text": message},
+		timeout=30,
+	)
+
+def register_telegram_commands() -> None:
+	token = os.getenv("TELEGRAM_TOKEN")
+	with open("telegram_commands.json") as f:
+		commands = json.load(f)
+	requests.post(
+		f"https://api.telegram.org/bot{token}/setMyCommands",
+		json=commands,
 		timeout=30,
 	)
 

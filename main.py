@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from clock_connector import get_time
-from telegram_connector import send_telegram_message, read_telegram_messages
+from telegram_connector import send_telegram_message, read_telegram_messages, register_telegram_commands
 from taskbook_connector import add_task, delete_task, read_tasks
 from notebook_connector import add_note, delete_note, read_notes
 from agent import prompt
@@ -28,6 +28,7 @@ def heartbeat() -> bool:
     return False
 
 if __name__ == "__main__":
+    register_telegram_commands()
     print("[System] Ready to work!")
     send_telegram_message("[System] Ready to work!")
     while True:

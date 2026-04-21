@@ -1,0 +1,28 @@
+{
+    "commands": [
+        {
+            "command": "listtasks",
+            "description": "List all tasks"
+        },
+        {
+            "command": "addtask",
+            "description": "Add a new task with a timestamp. Example: /addtask Buy groceries tomorrow at 5pm"
+        },
+        {
+            "command": "deletetask",
+            "description": "Delete a task by ID. Example: /deletetask 1"
+        },
+        {
+            "command": "addnote",
+            "description": "Add a new note. Example: /addnote Remember to call mom"
+        },
+        {
+            "command": "listnotes",
+            "description": "List all notes"
+        },
+        {
+            "command": "deletenote",
+            "description": "Delete a note by ID. Example: /deletenote 1"
+        }
+    ]
+}

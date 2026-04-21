@@ -43,6 +43,14 @@ Tasks/Reminders:
 /deletetask 3 - delete task with id 3
 ```
 
+Routines (recurring tasks):
+
+```code
+/addroutine take medication every day at 8am - add a recurring routine
+/listroutines - list all routines
+/deleteroutine 2 - delete routine with id 2
+```
+
 Notes:
 
 ```code

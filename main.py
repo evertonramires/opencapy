@@ -5,10 +5,9 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from clock_connector import get_time
-from telegram_connector import register_telegram_commands
 from taskbook_connector import delete_task, read_tasks
 from agent import prompt
-from chat_connector import send_message, read_messages
+from chat_connector import register_commands, send_message, read_messages
 
 
 heartbeat_interval_seconds = int(os.getenv("HEARTBEAT_INTERVAL_SECONDS", 10))
@@ -38,7 +37,7 @@ if __name__ == "__main__":
         with open(".env.EXAMPLE") as src, open(".env", "w") as dst:
             dst.write(src.read())
     
-    register_telegram_commands()
+    register_commands()
     print("🟢 Ready to work!")
     send_message("🟢 Ready to work!")
     while True:

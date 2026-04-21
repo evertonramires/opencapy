@@ -3,4 +3,5 @@ __pycache__/
 .venv
 hood/taskbook.json
 hood/memory.json
+hood/notebook.md
 IDENTITY.md

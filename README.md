@@ -31,7 +31,15 @@ Just chat around or use one of the commands below.
 Tasks/Reminders:
 
 ```code
-/add remember me to take a shower in 15 minutes from now - add a task
-/list - list all tasks
-/delete 3 - delete task with id 3
+/addtask remember me to take a shower in 15 minutes from now - add a task
+/listtasks - list all tasks
+/deletetask 3 - delete task with id 3
+```
+
+Notes:
+
+```code
+/addnote User likes blue color - add a note
+/listnotes - list all notes
+/deletenote 3 - delete note with id 3
 ```

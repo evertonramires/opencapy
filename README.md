@@ -69,4 +69,7 @@ Misc:
 /help - get the content of this README file
 ```
 
+## Chat API docs
 
+With chat API running, navigate to:
+[http://localhost:8000/docs](http://localhost:8000/docs)

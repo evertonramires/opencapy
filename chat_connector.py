@@ -1,7 +1,6 @@
 import os
 from api_connector import send_api_message, read_api_messages
 from telegram_connector import send_telegram_message, read_telegram_messages, send_telegram_typing_action, register_telegram_commands
-from api_connector import send_api_message, read_api_messages
 from notebook_connector import add_note, delete_note, read_notes
 from identity_connector import read_identity, write_identity
 from tools_connector import list_tools

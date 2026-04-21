@@ -1,6 +1,7 @@
 import os
 import time
 import calendar
+import subprocess
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -38,6 +39,10 @@ if __name__ == "__main__":
             dst.write(src.read())
     
     register_commands()
+    try:
+        subprocess.Popen(["uvicorn", "api.api:app", "--host", "0.0.0.0", "--port", "8000"], stdout=subprocess.DEVNULL)
+    except Exception as e:
+        print(f"⚠️ Failed to start API: {e}")
     print("🟢 Ready to work!")
     send_message("🟢 Ready to work!")
     while True:

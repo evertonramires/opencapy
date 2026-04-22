@@ -8,8 +8,9 @@ def prompt_model(text: str, tools=None, tool_handlers={}) -> str:
     host = os.getenv("LLM_API_HOST")
     key = os.getenv("LLM_API_KEY")
     model = os.getenv("LLM_MODEL")
+    temperature = float(os.getenv("LLM_TEMPERATURE", "1.2"))
     messages = [{"role": "user", "content": text}]
-    payload = {"model": model, "messages": messages}
+    payload = {"model": model, "messages": messages, "temperature": temperature}
     if tools:
         payload["tools"] = tools
     while True:

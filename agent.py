@@ -4,6 +4,7 @@ import os
 from connectors.llm_connector import prompt_model
 from connectors.memory_connector import add_memory, read_memory, prune_memory
 from connectors.clock_connector import get_time as connector_get_time
+from connectors.notebook_connector import read_notes
 
 identity_path = os.path.join(os.path.dirname(__file__), "IDENTITY.md")
 system_prompt_path = os.path.join(os.path.dirname(__file__), "SYSTEM_PROMPT.md")
@@ -44,8 +45,9 @@ def prompt(text: str) -> str:
     system_prompt = load_system_prompt()
     memory = read_memory()
     memory_text = "\n".join([f"{item['person']}: {item['memory']}" for item in memory])
+    notes = read_notes()
     tools, handlers = _load_tools()
-    full_prompt = f"System:\n{system_prompt}\n\nIdentity:\n{identity}\n\nMemory:\n{memory_text}\n\nPrompt: {text}"
+    full_prompt = f"System Rules:\n{system_prompt}\n\nYour Identity:\n{identity}\n\nYour Memory:\n{memory_text}\n\nYour Notes:\n{notes}\n\nPrompt:\n{text}"
     response = prompt_model(full_prompt, tools=tools, tool_handlers=handlers)
     add_memory(connector_get_time("utc"), text, "user")
     add_memory(connector_get_time("utc"), response, "you")

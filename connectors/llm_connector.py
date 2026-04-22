@@ -20,7 +20,10 @@ def prompt_model(text: str, tools=None, tool_handlers={}) -> str:
             json=payload,
             timeout=600, # 10 minutes timeout for long tasks or slow machines or big models or... you get it
         )
-        choice = response.json()["choices"][0]
+        data = response.json()
+        if "choices" not in data:
+            raise RuntimeError(data.get("error", {}).get("message", data))
+        choice = data["choices"][0]
         if choice["finish_reason"] == "tool_calls":
             assistant_msg = choice["message"]
             messages.append(assistant_msg)

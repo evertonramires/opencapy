@@ -1,4 +1,5 @@
 import os
+import json
 import time
 import calendar
 import subprocess
@@ -39,6 +40,27 @@ if __name__ == "__main__":
         with open(".env.EXAMPLE") as src, open(".env", "w") as dst:
             dst.write(src.read())
     
+    hood_files = {
+        "hood/memory.json": '{"memory": []}',
+        "hood/routines.json": '{"routines": []}',
+        "hood/taskbook.json": '{"tasks": []}',
+        "hood/whitelist.json": '[]',
+        "hood/notebook.md": "",
+    }
+    for path, default in hood_files.items():
+        valid = False
+        if os.path.exists(path):
+            try:
+                if path.endswith(".json"):
+                    json.loads(open(path).read())
+                valid = True
+            except Exception:
+                pass
+        if not valid:
+            print(f"⚙️ {path} missing or invalid, recreating with default content.")
+            with open(path, "w") as f:
+                f.write(default)
+
     register_commands()
     try:
         subprocess.Popen(["uvicorn", "api.api:app", "--host", "0.0.0.0", "--port", "8000"], stdout=subprocess.DEVNULL)

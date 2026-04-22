@@ -43,7 +43,7 @@ read_routines_tool = {
     "type": "function",
     "function": {
         "name": "read_routines",
-        "description": "Read all scheduled routines from the routines book.",
+        "description": "Read all scheduled routines from the routines book. Timestamps are in ISO8601 UTC format.",
         "parameters": {
             "type": "object",
             "properties": {},

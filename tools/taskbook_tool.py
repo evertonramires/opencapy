@@ -39,7 +39,7 @@ read_tasks_tool = {
     "type": "function",
     "function": {
         "name": "read_tasks",
-        "description": "Read all scheduled tasks from the taskbook.",
+        "description": "Read all scheduled tasks from the taskbook. Timestamps are in ISO8601 UTC format.",
         "parameters": {
             "type": "object",
             "properties": {},

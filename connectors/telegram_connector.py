@@ -59,7 +59,7 @@ def register_telegram_commands() -> None:
 	token = os.getenv("TELEGRAM_TOKEN")
 	if not token:
 		return
-	with open(os.path.join(os.path.dirname(__file__), "telegram_commands.json")) as f:
+	with open(os.path.join(os.path.dirname(__file__), "commands.json")) as f:
 		commands = json.load(f)
 	requests.post(
 		f"https://api.telegram.org/bot{token}/setMyCommands",

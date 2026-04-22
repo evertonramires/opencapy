@@ -67,6 +67,10 @@
         {
             "command": "listwhitelist",
             "description": "List all domains in the whitelist"
+        },
+        {
+            "command": "commands",
+            "description": "List all available commands"
         }
     ]
 }

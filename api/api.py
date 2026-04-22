@@ -49,3 +49,8 @@ def client_read():
 def get_memory():
     memory_path = base_dir.parent / "hood" / "memory.json"
     return json.loads(memory_path.read_text())
+
+@app.get("/commands")
+def get_commands():
+    commands_path = base_dir.parent / "connectors" / "commands.json"
+    return json.loads(commands_path.read_text())

@@ -128,6 +128,12 @@ def read_messages():
             elif "/listwhitelist" in message:
                 whitelist = read_whitelist()
                 send_message(f"📝 Whitelist:\n" + "\n".join(whitelist) if whitelist else "📝 Whitelist is empty.")
+            elif "/commands" in message:
+                import json
+                with open("connectors/commands.json") as f:
+                    commands = json.load(f)["commands"]
+                command_list = "\n".join([f"/{c['command']} - {c['description']}" for c in commands])
+                send_message(f"Available commands:\n{command_list}")
             elif "/model" in message:
                 send_message(os.getenv("LLM_MODEL", "unknown"))
             elif "/help" in message:

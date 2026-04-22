@@ -39,6 +39,11 @@ def load_identity():
 def load_system_prompt():
     with open(system_prompt_path, "r") as f:
         return f.read().strip()
+
+def load_time_info():
+    timezone = os.getenv("TIMEZONE", "UTC")
+    current_time = connector_get_time("utc")
+    return current_time, timezone
     
 def prompt(text: str) -> str:
     identity = load_identity()
@@ -46,8 +51,9 @@ def prompt(text: str) -> str:
     memory = read_memory()
     memory_text = "\n".join([f"{item['person']}: {item['memory']}" for item in memory])
     notes = read_notes()
+    current_time, timezone = load_time_info()
     tools, handlers = _load_tools()
-    full_prompt = f"System Rules:\n{system_prompt}\n\nYour Identity:\n{identity}\n\nYour Memory:\n{memory_text}\n\nYour Notes:\n{notes}\n\nPrompt:\n{text}"
+    full_prompt = f"System Rules:\n{system_prompt}\n\nYour Identity:\n{identity}\n\nYour Memory:\n{memory_text}\n\nYour Notes:\n{notes}\n\nCurrent system time: UTC:{current_time}, User timezone:{timezone}\n\nPrompt:\n{text}"
     response = prompt_model(full_prompt, tools=tools, tool_handlers=handlers)
     add_memory(connector_get_time("utc"), text, "user")
     add_memory(connector_get_time("utc"), response, "you")

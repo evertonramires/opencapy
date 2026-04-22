@@ -16,7 +16,7 @@ clock_tool = {
                 "format": {
                     "type": "string",
                     "enum": ["utc", "local", "timestamp"],
-                    "description": "The time format to return.",
+                    "description": "The time format to return. UTC preferred.",
                 }
             },
             "required": ["format"],

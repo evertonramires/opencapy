@@ -67,4 +67,7 @@ if __name__ == "__main__":
                         send_message(f"🔁 {response}")
         except Exception as e:
             print(f"⚠️ {e}\n 🔵 Continuing execution...")
-            send_message(f"⚠️ {e}\n 🔵 Continuing execution...")
+            try:
+                send_message(f"⚠️ {e}\n 🔵 Continuing execution...")
+            except Exception:
+                pass

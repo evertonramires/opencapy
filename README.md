@@ -9,9 +9,20 @@ This is a bare minimum AI agentic harness I created after giving up on openclaw 
 - LM Studio or OpenAI API compatible API
 - Tool calling capable model loaded
 
+## Pre-Install
+
+This step is just to help installing uv python and lm-studio on linux, if you're using a different environment, skip it.
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+curl -fsSL https://lmstudio.ai/install.sh | bash
+```
+
 ## Install
 
 ```bash
+git clone https://github.com/evertonramires/opencapy.git
+cd opencapy
 uv venv
 source .venv/bin/activate
 uv pip install -r requirements.txt

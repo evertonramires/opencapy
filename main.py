@@ -3,6 +3,7 @@ import json
 import time
 import calendar
 import subprocess
+import traceback
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -11,6 +12,7 @@ from connectors.taskbook_connector import delete_task, read_tasks
 from connectors.routines_connector import read_routines
 from agent import prompt
 from connectors.chat_connector import register_commands, send_message, read_messages
+from datetime import datetime
 
 
 heartbeat_interval_seconds = int(os.getenv("HEARTBEAT_INTERVAL_SECONDS", 10))
@@ -66,6 +68,7 @@ if __name__ == "__main__":
         subprocess.Popen(["uvicorn", "api.api:app", "--host", "0.0.0.0", "--port", "8000"], stdout=subprocess.DEVNULL)
     except Exception as e:
         print(f"⚠️ Failed to start API: {e}")
+    time.sleep(2)  # Wait for API server to start
     print("🟢 Ready to work!")
     send_message("🟢 Ready to work!")
     while True:
@@ -89,7 +92,12 @@ if __name__ == "__main__":
                         send_message(f"🔁 {response}")
         except Exception as e:
             print(f"⚠️ {e}\n 🔵 Continuing execution...")
+            error_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            error_type = type(e).__name__
+            error_trace = traceback.format_exc()
+            error_msg = f"⚠️ [{error_time}] {error_type}: {e}\n{error_trace}\n🔵 Continuing execution..."
+            print(error_msg)
             try:
-                send_message(f"⚠️ {e}\n 🔵 Continuing execution...")
+                send_message(f"⚠️ Error at {error_time}:\n{error_type}: {e}")
             except Exception:
                 pass

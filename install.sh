@@ -26,4 +26,22 @@ source .venv/bin/activate
 uv pip install -r requirements.txt
 
 echo "Installation complete."
+echo ""
+echo "Before starting the service, review and edit these files if needed:"
+echo " - $(pwd)/.env"
+echo " - $(pwd)/IDENTITY.md"
+echo ""
+echo "1) Edit these files now and start manually later"
+echo "2) Skip editing and start the service now"
+read -rp "Choose [1/2]: " install_choice
+install_choice="${install_choice:-2}"
+
+if [ "$install_choice" = "1" ]; then
+    echo "Alright! After you finish editing and saving, run ./start.sh manually."
+    exit 0
+fi
+
+echo "Ok then. Proceeding without modifying the files."
+echo "Some tools and Telegram will not work because there will be missing configurations."
+
 ./start.sh

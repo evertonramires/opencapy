@@ -118,7 +118,7 @@ def read_messages():
                     task_question = task.get("question", task_title)
                     task_description = task.get("description", "")
                     original_user_prompt = task.get("original_user_prompt", "")
-                    send_message(f"✅ Answer received for pending task [{task_id}] {task_title}. Continuing now...")
+                    send_message(f"✅ Answer received for pending task [ {task_id} ] ({task_title}). Continuing now...")
                     response = prompt(
                         f"[system] Human answered your pending clarification task.\n\n"
                         f"Task ID: {task['id']}\n"

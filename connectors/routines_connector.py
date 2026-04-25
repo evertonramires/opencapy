@@ -16,7 +16,7 @@ def add_routine(start_time, interval, task) -> str:
     data.append({"id": next_id, "start_time": start_time, "interval": interval, "task": task})
     with open(ROUTINES_PATH, "w") as f:
         json.dump({"routines": data}, f, indent=4)
-    return f"⚙️ Routine added: {next_id}. {task} starting at {start_time}, repeating every {interval}s"
+    return f"♾️ Routine added: {next_id}. {task} starting at {start_time}, repeating every {interval}s"
 
 def read_routines():
     _ensure_routines()

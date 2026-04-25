@@ -2,15 +2,15 @@ from connectors.tools_connector import notify_tool_use
 from connectors.routines_connector import add_routine as add_routine_connector, read_routines as read_routines_connector, delete_routine as delete_routine_connector
 
 def add_routine(start_time: str, interval: int, task: str) -> str:
-    notify_tool_use(f"🔧🔁➕ Routines tool used to add a routine.")
+    notify_tool_use(f"🔧♾️➕ Routines tool used to add a routine.")
     return add_routine_connector(start_time, interval, task)
 
 def read_routines() -> str:
-    notify_tool_use(f"🔧🔁🔍 Routines tool used to read routines.")
+    notify_tool_use(f"🔧♾️🔍 Routines tool used to read routines.")
     return read_routines_connector()
 
 def delete_routine(routine_id: int) -> None:
-    notify_tool_use(f"🔧🔁❌ Routines tool used to delete routine {routine_id}.")
+    notify_tool_use(f"🔧♾️❌ Routines tool used to delete routine {routine_id}.")
     delete_routine_connector(routine_id)
 
 add_routine_tool = {

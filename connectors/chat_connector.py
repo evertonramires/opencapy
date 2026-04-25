@@ -82,7 +82,7 @@ def read_messages():
             elif _is_command(message, "/listroutines"):
                 routines = read_routines()
                 routine_list = "\n".join([f"[{r['start_time']} every {_format_routine_interval(r['interval'])}] {r['id']}. {r['task']}" for r in routines])
-                send_message(f"🔁 Current routines:\n{routine_list}")
+                send_message(f"♾️ Current routines:\n{routine_list}")
             elif _is_command(message, "/deleteroutine"):
                 try:
                     routine_id = int(message[len("/deleteroutine"):].strip())
@@ -138,7 +138,7 @@ def read_messages():
                     raw = message[len("/blacklist"):].strip()
                     domain = remove_from_whitelist(raw)
                     if domain:
-                        send_message(f"🗑️ {domain} removed from whitelist.")
+                        send_message(f"❌ {domain} removed from whitelist.")
                     else:
                         send_message(f"Domain already not existent in whitelist.")
                 except Exception as e:

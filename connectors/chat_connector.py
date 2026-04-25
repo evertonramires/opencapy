@@ -135,7 +135,7 @@ def read_messages():
                     commands = json.load(f)["commands"]
                 command_list = "\n".join([f"/{c['command']} - {c['description']}" for c in commands])
                 send_message(f"Available commands:\n{command_list}")
-            elif "/checkinternet" in message:
+            elif "/internet" in message:
                 internet = check_internet_connection()
                 send_message(
                     "🌐 Internet check:\n"

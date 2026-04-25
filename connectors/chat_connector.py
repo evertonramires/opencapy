@@ -12,6 +12,22 @@ from connectors.internet_connector import check_internet_connection
 from connectors.update_connector import run_self_update, restart_process
 from agent import prompt
 
+
+def _format_routine_interval(interval_seconds: int) -> str:
+    if interval_seconds >= 86400 and interval_seconds % 86400 == 0:
+        days = interval_seconds // 86400
+        unit = "day" if days == 1 else "days"
+        return f"{days} {unit}"
+
+    hours = interval_seconds / 3600
+    hours_text = f"{int(hours)}" if hours == int(hours) else f"{hours:.1f}"
+    unit = "hour" if hours == 1 else "hours"
+    return f"{hours_text} {unit}"
+
+
+def _is_command(message: str, command: str) -> bool:
+    return message == command or message.startswith(f"{command} ")
+
 def register_commands():
     register_telegram_commands()
 
@@ -27,9 +43,9 @@ def read_messages():
     if messages:
         send_telegram_typing_action()
         for message in messages:
-            if "/addtask" in message:
+            if _is_command(message, "/addtask"):
                 try:
-                    task_text = message.split("/addtask")[1].strip()
+                    task_text = message[len("/addtask"):].strip()
                     current_time = get_time("utc")
                     llm_response = prompt(f"Current time: {current_time}\nExtract a task and scheduled timestamp from: \"{task_text}\"\nReply with exactly two lines:\nTASK: <task description>\nTIMESTAMP: <ISO8601 UTC timestamp>")
                     task = llm_response.split("TASK:")[1].split("\n")[0].strip()
@@ -39,20 +55,20 @@ def read_messages():
                     send_message(add_task_response)
                 except Exception as e:
                     send_message(f"Sorry, I couldn't add the task, can we try again? Details: {e}")
-            elif "/listtasks" in message:
+            elif _is_command(message, "/listtasks"):
                 tasks = read_tasks()
                 task_list = "\n".join([f"[{task['timestamp']}] {task['id']}. {task['task']}" for task in tasks])
                 send_message(f"📑 Current tasks:\n{task_list}")
-            elif "/deletetask" in message:
+            elif _is_command(message, "/deletetask"):
                 try:
-                    task_id = int(message.split("/deletetask")[1].strip())
+                    task_id = int(message[len("/deletetask"):].strip())
                     delete_task(task_id)
                     send_message(f"Task {task_id} deleted.")
                 except Exception as e:
                     send_message(f"Sorry, I couldn't delete the task, can we try again? Details: {e}")
-            elif "/addroutine" in message:
+            elif _is_command(message, "/addroutine"):
                 try:
-                    routine_text = message.split("/addroutine")[1].strip()
+                    routine_text = message[len("/addroutine"):].strip()
                     current_time = get_time("utc")
                     llm_response = prompt(f"Current time: {current_time}\nExtract a recurring routine from: \"{routine_text}\"\nReply with exactly three lines:\nTASK: <task description>\nSTART_TIME: <ISO8601 UTC timestamp>\nINTERVAL_SECONDS: <integer seconds>")
                     task = llm_response.split("TASK:")[1].split("\n")[0].strip()
@@ -63,45 +79,45 @@ def read_messages():
                     send_message(add_routine_response)
                 except Exception as e:
                     send_message(f"Sorry, I couldn't add the routine, can we try again? Details: {e}")
-            elif "/listroutines" in message:
+            elif _is_command(message, "/listroutines"):
                 routines = read_routines()
-                routine_list = "\n".join([f"[{r['start_time']} every {r['interval']}s] {r['id']}. {r['task']}" for r in routines])
+                routine_list = "\n".join([f"[{r['start_time']} every {_format_routine_interval(r['interval'])}] {r['id']}. {r['task']}" for r in routines])
                 send_message(f"🔁 Current routines:\n{routine_list}")
-            elif "/deleteroutine" in message:
+            elif _is_command(message, "/deleteroutine"):
                 try:
-                    routine_id = int(message.split("/deleteroutine")[1].strip())
+                    routine_id = int(message[len("/deleteroutine"):].strip())
                     delete_routine(routine_id)
                     send_message(f"Routine {routine_id} deleted.")
                 except Exception as e:
                     send_message(f"Sorry, I couldn't delete the routine, can we try again? Details: {e}")
-            elif "/addnote" in message:
+            elif _is_command(message, "/addnote"):
                 try:
-                    note_text = message.split("/addnote")[1].strip()
+                    note_text = message[len("/addnote"):].strip()
                     current_time = get_time("utc")
                     add_note_response = add_note(current_time, note_text)
                     print(add_note_response)
                     send_message(add_note_response)
                 except Exception as e:
                     send_message(f"Sorry, I couldn't add the note, can we try again? Details: {e}")
-            elif "/listnotes" in message:
+            elif _is_command(message, "/listnotes"):
                 notes = read_notes()
                 send_message(f"📔 Current notes:\n{notes}")
-            elif "/deletenote" in message:
+            elif _is_command(message, "/deletenote"):
                 try:
-                    note_id = int(message.split("/deletenote")[1].strip())
+                    note_id = int(message[len("/deletenote"):].strip())
                     delete_note(note_id)
                     send_message(f"Note {note_id} deleted.")
                 except Exception as e:
                     send_message(f"Sorry, I couldn't delete the note, can we try again? Details: {e}")
-            elif "/listtools" in message:
+            elif _is_command(message, "/listtools"):
                 tools = list_tools()
                 send_message(tools)
-            elif "/readidentity" in message:
+            elif _is_command(message, "/readidentity"):
                 identity = read_identity()
                 send_message(identity)
-            elif "/writeidentity" in message:
+            elif _is_command(message, "/writeidentity"):
                 try:
-                    identity_content = message.split("/writeidentity")[1].strip()
+                    identity_content = message[len("/writeidentity"):].strip()
                     if not identity_content:
                         send_message("Identity content cannot be empty. Try typing the entire command followed by the new identity content in the same line.")
                         continue
@@ -110,16 +126,16 @@ def read_messages():
                     send_message(f"New identity:\n{identity}")
                 except Exception as e:
                     send_message(f"Sorry, I couldn't update the identity, can we try again? Details: {e}")
-            elif "/whitelist" in message:
+            elif _is_command(message, "/whitelist"):
                 try:
-                    raw = message.split("/whitelist")[1].strip()
+                    raw = message[len("/whitelist"):].strip()
                     domain = add_to_whitelist(raw)
                     send_message(f"✅ {domain} added to whitelist.")
                 except Exception as e:
                     send_message(f"Sorry, I couldn't add to the whitelist, can we try again? Details: {e}")
-            elif "/blacklist" in message:
+            elif _is_command(message, "/blacklist"):
                 try:
-                    raw = message.split("/blacklist")[1].strip()
+                    raw = message[len("/blacklist"):].strip()
                     domain = remove_from_whitelist(raw)
                     if domain:
                         send_message(f"🗑️ {domain} removed from whitelist.")
@@ -127,16 +143,16 @@ def read_messages():
                         send_message(f"Domain already not existent in whitelist.")
                 except Exception as e:
                     send_message(f"Sorry, I couldn't remove from the whitelist, can we try again? Details: {e}")
-            elif "/listwhitelist" in message:
+            elif _is_command(message, "/listwhitelist"):
                 whitelist = read_whitelist()
                 send_message(f"📝 Whitelist:\n" + "\n".join(whitelist) if whitelist else "📝 Whitelist is empty.")
-            elif "/commands" in message:
+            elif _is_command(message, "/commands"):
                 import json
                 with open("connectors/commands.json") as f:
                     commands = json.load(f)["commands"]
                 command_list = "\n".join([f"/{c['command']} - {c['description']}" for c in commands])
                 send_message(f"Available commands:\n{command_list}")
-            elif "/internet" in message:
+            elif _is_command(message, "/internet"):
                 internet = check_internet_connection()
                 send_message(
                     "🌐 Internet check:\n"
@@ -149,7 +165,7 @@ def read_messages():
                     f"WARP: {internet['using_warp']}\n"
                     f"Gateway: {internet['using_gateway']}"
                 )
-            elif "/update" in message:
+            elif _is_command(message, "/update"):
                 try:
                     send_message("🔄 Running self update...")
                     update_result = run_self_update()
@@ -158,15 +174,15 @@ def read_messages():
                         restart_process()
                 except Exception as e:
                     send_message(f"Sorry, I couldn't update right now, can we try again? Details: {e}")
-            elif "/restart" in message:
+            elif _is_command(message, "/restart"):
                 try:
                     send_message("🔄 Restarting now...")
                     restart_process()
                 except Exception as e:
                     send_message(f"Sorry, I couldn't restart right now, can we try again? Details: {e}")
-            elif "/model" in message:
+            elif _is_command(message, "/model"):
                 send_message(os.getenv("LLM_MODEL", "unknown"))
-            elif "/help" in message:
+            elif _is_command(message, "/help"):
                 try:
                     # Prints README.md content
                     with open("README.md") as f:

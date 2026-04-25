@@ -1,21 +1,40 @@
 import json
 import os
+import random
 import requests
 from dotenv import load_dotenv
 load_dotenv()
 
-def prompt_model(text: str, tools=None, tool_handlers={}) -> str:
-    host = os.getenv("LLM_API_HOST")
+
+def _resolve_chat_endpoint(host: str) -> str:
+    base = host.rstrip("/")
+    if base.endswith("/v1/chat/completions"):
+        return base
+    return f"{base}/v1/chat/completions"
+
+
+def prompt_model(text: str, tools=None, tool_handlers=None) -> str:
+    host = os.getenv("LLM_API_HOST", "")
     key = os.getenv("LLM_API_KEY")
     model = os.getenv("LLM_MODEL")
     temperature = float(os.getenv("LLM_TEMPERATURE", "1.2"))
+    top_p = float(os.getenv("LLM_TOP_P", "0.95"))
+    seed = random.randint(1, 2147483647)
+    if tool_handlers is None:
+        tool_handlers = {}
     messages = [{"role": "user", "content": text}]
-    payload = {"model": model, "messages": messages, "temperature": temperature}
+    payload = {
+        "model": model,
+        "messages": messages,
+        "temperature": temperature,
+        "top_p": top_p,
+        "seed": seed,
+    }
     if tools:
         payload["tools"] = tools
     while True:
         response = requests.post(
-            f"{host}/v1/chat/completions",
+            _resolve_chat_endpoint(host),
             headers={"Authorization": f"Bearer {key}"},
             json=payload,
             timeout=600, # 10 minutes timeout for long tasks or slow machines or big models or... you get it

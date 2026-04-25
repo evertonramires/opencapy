@@ -192,11 +192,17 @@ def _oauth_access_token() -> dict:
     client_id = _env_value("CALENDAR_OAUTH_CLIENT_ID", "")
     client_secret = _env_value("CALENDAR_OAUTH_CLIENT_SECRET", "")
     refresh_token = _load_oauth_refresh_token()
-    if not client_id or not client_secret or not refresh_token:
+    if not client_id or not client_secret:
         return {
             "status": "error",
             "tool": "calendar",
-            "message": "Calendar OAuth is not configured. Set CALENDAR_OAUTH_CLIENT_ID and CALENDAR_OAUTH_CLIENT_SECRET in .env, then run /calendarauth to save refresh token in hood/calendar_oauth.json.",
+            "message": "Calendar OAuth is not configured. Set CALENDAR_OAUTH_CLIENT_ID and CALENDAR_OAUTH_CLIENT_SECRET in .env.",
+        }
+    if not refresh_token:
+        return {
+            "status": "error",
+            "tool": "calendar",
+            "message": "Calendar authentication is missing. Run /calendarauth to connect Google Calendar.",
         }
     response = requests.post(
         "https://oauth2.googleapis.com/token",

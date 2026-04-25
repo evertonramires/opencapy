@@ -24,7 +24,7 @@ def _load_tools():
     return tools, handlers
 
 def ask_smarter(question: str) -> str:
-    notify_tool_use(f"🔧🧠✨ smarter_tool.ask_smarter called")
+    notify_tool_use(f"🔧🧠✨ Smarter tool used to ask a smarter agent.")
     tools, handlers = _load_tools()
     return connector_ask_smarter(question, tools=tools, tool_handlers=handlers)
 

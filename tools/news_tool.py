@@ -2,7 +2,7 @@ from connectors.tools_connector import notify_tool_use
 from connectors.news_connector import get_news as connector_get_news
 
 def get_news(topic: str, count: int) -> list[dict]:
-    notify_tool_use(f"🔧📰 news_tool.get_news called")
+    notify_tool_use(f"🔧📰 News tool used to get {count} headlines for topic {topic}.")
     return connector_get_news(topic, count)
 
 get_news_tool = {

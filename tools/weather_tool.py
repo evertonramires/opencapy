@@ -2,7 +2,7 @@ from connectors.tools_connector import notify_tool_use
 from connectors.weather_connector import get_weather as connector_get_weather
 
 def get_weather(location: str) -> dict:
-    notify_tool_use(f"🔧🌤️ weather_tool.get_weather called")
+    notify_tool_use(f"🔧🌤️ Weather tool used to get weather for {location}.")
     return connector_get_weather(location)
 
 get_weather_tool = {

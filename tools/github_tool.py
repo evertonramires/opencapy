@@ -8,19 +8,19 @@ from connectors.github_connector import (
 )
 
 def search_github(query: str, type: str) -> list[dict]:
-    notify_tool_use(f"🔧🐙 github_tool.search_github called")
+    notify_tool_use(f"🔧🐙🔍 GitHub tool used to search {type} for {query}.")
     return connector_search_github(query, type)
 
 def get_github_repo(owner: str, repo: str) -> dict:
-    notify_tool_use(f"🔧🐙 github_tool.get_github_repo called")
+    notify_tool_use(f"🔧🐙📦 GitHub tool used to get repository details for {owner}/{repo}.")
     return connector_get_github_repo(owner, repo)
 
 def get_github_issues(owner: str, repo: str, state: str) -> list[dict]:
-    notify_tool_use(f"🔧🐙 github_tool.get_github_issues called")
+    notify_tool_use(f"🔧🐙🪲 GitHub tool used to get {state} issues for {owner}/{repo}.")
     return connector_get_github_issues(owner, repo, state)
 
 def get_github_releases(owner: str, repo: str) -> list[dict]:
-    notify_tool_use(f"🔧🐙 github_tool.get_github_releases called")
+    notify_tool_use(f"🔧🐙🚀 GitHub tool used to get releases for {owner}/{repo}.")
     return connector_get_github_releases(owner, repo)
 
 # def get_github_file(owner: str, repo: str, path: str) -> str:

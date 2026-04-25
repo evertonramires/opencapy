@@ -1,10 +1,15 @@
 import os
 import importlib.util
+from dotenv import load_dotenv
+load_dotenv()
+
+announce_tool_calls = os.getenv("ANNOUNCE_TOOL_CALLS", "false").lower()
 
 def notify_tool_use(message: str) -> None:
-    from connectors.chat_connector import send_message
     print(message)
-    send_message(message)
+    if announce_tool_calls in ["true", "1", "yes"]:
+        from connectors.chat_connector import send_message
+        send_message(message)
     
 def list_tools() -> str:
     tools_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "tools")

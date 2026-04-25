@@ -110,5 +110,5 @@ if __name__ == "__main__":
                 except Exception:
                     pass
     except KeyboardInterrupt:
-        print("\n\n⚙️ Ctrl+C detected, running stop.sh...")
+        print("\n\n⚙️ Ctrl+C detected, running stop.sh..\n\n")
         subprocess.run(["bash", "stop.sh"])

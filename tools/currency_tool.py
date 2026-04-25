@@ -2,7 +2,7 @@ from connectors.tools_connector import notify_tool_use
 from connectors.currency_connector import get_currency as connector_get_currency
 
 def get_currency(base: str, target: str) -> dict:
-    notify_tool_use(f"🔧💱 currency_tool.get_currency called")
+    notify_tool_use(f"🔧💱 Currency tool used to get exchange rate for {base}/{target}.")
     return connector_get_currency(base, target)
 
 get_currency_tool = {

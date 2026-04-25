@@ -2,15 +2,15 @@ from connectors.tools_connector import notify_tool_use
 from connectors.taskbook_connector import add_task as add_task_connector, read_tasks as read_tasks_connector, delete_task as delete_task_connector
 
 def add_task(timestamp: str, task: str) -> str:
-    notify_tool_use(f"🔧📑➕ taskbook_tool.add_task called")
+    notify_tool_use(f"🔧📑➕ Taskbook tool used to add a task.")
     return add_task_connector(timestamp, task)
 
 def read_tasks() -> str:
-    notify_tool_use(f"🔧📑🔍 taskbook_tool.read_tasks called")
+    notify_tool_use(f"🔧📑🔍 Taskbook tool used to read tasks.")
     return read_tasks_connector()
 
 def delete_task(task_id: int) -> None:
-    notify_tool_use(f"🔧📑❌ taskbook_tool.delete_task called")
+    notify_tool_use(f"🔧📑❌ Taskbook tool used to delete task {task_id}.")
     delete_task_connector(task_id)
 
 add_task_tool = {

@@ -2,7 +2,7 @@ from connectors.tools_connector import notify_tool_use
 from connectors.internet_connector import browse_internet as connector_browse_internet
 
 def browse_internet(url: str) -> dict:
-    notify_tool_use(f"🔧🌐 internet_tool.browse_internet called")
+    notify_tool_use(f"🔧🌐🔍 Internet tool used to browse {url}.")
     return connector_browse_internet(url)
 
 browse_internet_tool = {

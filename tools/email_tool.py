@@ -2,11 +2,11 @@ from connectors.tools_connector import notify_tool_use
 from connectors.email_connector import send_email as connector_send_email, read_emails as connector_read_emails
 
 def send_email(to: str, subject: str, body: str) -> dict:
-    notify_tool_use(f"🔧📧➕ email_tool.send_email called")
+    notify_tool_use(f"🔧📧➕ Email tool used to send an email to {to}.")
     return connector_send_email(to, subject, body)
 
 def read_emails(count: int) -> list[dict]:
-    notify_tool_use(f"🔧📧🔍 email_tool.read_emails called")
+    notify_tool_use(f"🔧📧🔍 Email tool used to read {count} most recent emails.")
     return connector_read_emails(count)
 
 send_email_tool = {

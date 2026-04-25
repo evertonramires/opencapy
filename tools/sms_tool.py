@@ -2,7 +2,7 @@ from connectors.tools_connector import notify_tool_use
 from connectors.sms_connector import send_sms as connector_send_sms
 
 def send_sms(to: str, body: str) -> dict:
-    notify_tool_use(f"🔧📱 sms_tool.send_sms called")
+    notify_tool_use(f"🔧📱➕ SMS tool used to send an SMS to {to}.")
     return connector_send_sms(to, body)
 
 send_sms_tool = {

@@ -16,6 +16,8 @@ from datetime import datetime
 
 
 heartbeat_interval_seconds = int(os.getenv("HEARTBEAT_INTERVAL_SECONDS", 10))
+announce_errors = os.getenv("ANNOUNCE_ERRORS", "false").lower()
+
 chat_api_host = os.getenv("CHAT_API_HOST", "http://localhost:8000")
 chat_api_bind = chat_api_host.replace("http://", "").replace("https://", "")
 chat_api_bind_host, chat_api_bind_port = chat_api_bind.split(":")
@@ -73,11 +75,11 @@ if __name__ == "__main__":
         except Exception as e:
             print(f"⚠️ Failed to start API: {e}")
         time.sleep(5)  # Wait for API server to start
-        print("⚙️ Waking up your Capy, this may take a minute...")
+        print("\n\n⚙️ Waking up your Capy, this may take a minute..")
         send_message("⚙️ Waking up your Capy, this may take a minute...")
         wake_message = prompt(f"[system] Wake up! tell the user that you just woke up in a fun, playful way!")
         send_message(f"{wake_message}\n\n🟢 Ready to work!")
-        print(f"Navigate to {chat_api_host} to start chatting.")
+        print(f"\n\nNavigate to {chat_api_host}/ to start chatting.\n\n🟢 Ready to work!\n\n")
 
         while True:
             try:
@@ -99,14 +101,18 @@ if __name__ == "__main__":
                             response = prompt(f"[system] This routine just triggered, if it requires a tool, execute, if not, treat as a notification to the user: {routine['task']}")
                             send_message(f"🔁 {response}")
             except Exception as e:
-                print(f"⚠️ {e}\n 🔵 Continuing execution...")
-                error_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                error_type = type(e).__name__
-                error_trace = traceback.format_exc()
-                error_msg = f"⚠️ [{error_time}] {error_type}: {e}\n{error_trace}\n🔵 Continuing execution..."
-                print(error_msg)
                 try:
-                    send_message(f"⚠️ Error at {error_time}:\n{error_type}: {e}")
+                    error_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    error_type = type(e).__name__
+                    frames = traceback.extract_tb(e.__traceback__)
+                    connector_frame = next((frame for frame in reversed(frames) if "/connectors/" in frame.filename and frame.filename.endswith("_connector.py")), None)
+                    error_frame = connector_frame or frames[-1]
+                    error_module = os.path.splitext(os.path.basename(error_frame.filename))[0]
+                    error_trace = traceback.format_exc()
+                    error_msg = f"\n⚠️ [{error_time}][{error_module}] {error_type}.\n\n{e if announce_errors == "true" else ""}\n🔵 Continuing execution...\n\n"
+                    print(error_msg)
+                    if announce_errors == "true":
+                        send_message(f"⚠️ Error at {error_time}:\nModule: {error_module}\n{error_type}: {e}")
                 except Exception:
                     pass
     except KeyboardInterrupt:

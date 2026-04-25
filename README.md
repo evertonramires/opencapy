@@ -6,19 +6,37 @@ This is a bare minimum AI agentic harness I created after giving up on openclaw 
 
 ## Requirements
 
-- LM Studio or OpenAI API compatible API
+This harness was devoloped on Ubuntu 24.04, using UV Python, LM Studio and google/gemma-4-26b-a4b model. This should work on a wide variety of different environments, but as a single person project, I can't test much, please test and open an issue if it doesn't work for your setup.
+
+- Linux
+- Python
+- LM Studio or OpenAI standard compatible API
 - Tool calling capable model loaded
 
-## Pre-Install
+## Install
+
+```bash
+./install.sh
+```
+
+## Run
+
+```bash
+./start
+```
+
+## Manual Pre-Install
 
 This step is just to help installing uv python and lm-studio on linux, if you're using a different environment, skip it.
 
 ```bash
-curl -LsSf https://astral.sh/uv/install.sh | sh
-curl -fsSL https://lmstudio.ai/install.sh | bash
+curl -LsSf https://astral.sh/uv/install.sh | sh # installs uv python
+curl -fsSL https://lmstudio.ai/install.sh | bash # installs lmstudio cli
+lms get google/gemma-4-26b-a4b -y
+lms load google/gemma-4-26b-a4b
 ```
 
-## Install
+## Manual Install
 
 ```bash
 git clone https://github.com/evertonramires/opencapy.git
@@ -30,11 +48,12 @@ cp .env.EXAMPLE .env
 cp IDENTITY.md.EXAMPLE IDENTITY.md
 ```
 
-## Run
+## Manual Run
 
 Adjust .env and IDENTITY.md as wanted and then run:
 
 ```bash
+source .venv/bin/activate
 uv run main.py
 ```
 

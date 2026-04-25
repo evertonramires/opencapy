@@ -7,6 +7,7 @@ from connectors.tools_connector import list_tools
 from connectors.clock_connector import get_time
 from connectors.taskbook_connector import add_task, delete_task, read_tasks
 from connectors.routines_connector import add_routine, delete_routine, read_routines
+from connectors.human_connector import read_human_tasks, get_human_task, delete_human_task
 from connectors.whitelist_connector import add_to_whitelist, remove_from_whitelist, read_whitelist
 from connectors.internet_connector import check_internet_connection
 from connectors.update_connector import run_self_update, restart_process
@@ -83,6 +84,16 @@ def read_messages():
                 routines = read_routines()
                 routine_list = "\n".join([f"[{r['start_time']} every {_format_routine_interval(r['interval'])}] {r['id']}. {r['task']}" for r in routines])
                 send_message(f"♾️ Current routines:\n{routine_list}")
+            elif _is_command(message, "/listpending"):
+                pending_tasks = read_human_tasks()
+                if pending_tasks:
+                    pending_list = "\n".join([
+                        f"[{task['timestamp']}] {task['id']}. {task.get('title', 'Human guidance')} - {task.get('question', task.get('title', ''))}"
+                        for task in pending_tasks
+                    ])
+                    send_message(f"🤝 Pending human tasks:\n{pending_list}")
+                else:
+                    send_message("🤝 No pending human tasks.")
             elif _is_command(message, "/deleteroutine"):
                 try:
                     routine_id = int(message[len("/deleteroutine"):].strip())
@@ -90,6 +101,39 @@ def read_messages():
                     send_message(f"Routine {routine_id} deleted.")
                 except Exception as e:
                     send_message(f"Sorry, I couldn't delete the routine, can we try again? Details: {e}")
+            elif _is_command(message, "/answer"):
+                try:
+                    raw = message[len("/answer"):].strip()
+                    parts = raw.split(" ", 1)
+                    if len(parts) < 2 or not parts[0].strip() or not parts[1].strip():
+                        send_message("Usage: /answer <id> <response>\nUse /listpending to check open task ids.")
+                        continue
+                    task_id = int(parts[0].strip())
+                    answer = parts[1].strip()
+                    task = get_human_task(task_id)
+                    if not task:
+                        send_message(f"Pending task {task_id} not found. Use /listpending to check open task ids.")
+                        continue
+                    task_title = task.get("title", "Human guidance")
+                    task_question = task.get("question", task_title)
+                    task_description = task.get("description", "")
+                    original_user_prompt = task.get("original_user_prompt", "")
+                    send_message(f"✅ Answer received for pending task [{task_id}] {task_title}. Continuing now...")
+                    response = prompt(
+                        f"[system] Human answered your pending clarification task.\n\n"
+                        f"Task ID: {task['id']}\n"
+                        f"Task timestamp (UTC): {task['timestamp']}\n"
+                        f"Original user prompt: {original_user_prompt}\n"
+                        f"Task title: {task_title}\n"
+                        f"Question asked to user: {task_question}\n"
+                        f"Task summary before asking help: {task_description}\n"
+                        f"Human answer: {answer}\n\n"
+                        f"Continue from where you stopped and respond to the user."
+                    )
+                    send_message(response)
+                    delete_human_task(task_id)
+                except Exception as e:
+                    send_message(f"Sorry, I couldn't process your answer, can we try again? Details: {e}")
             elif _is_command(message, "/addnote"):
                 try:
                     note_text = message[len("/addnote"):].strip()

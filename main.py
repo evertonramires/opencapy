@@ -52,6 +52,7 @@ if __name__ == "__main__":
             "hood/memory.json": '{"memory": []}',
             "hood/routines.json": '{"routines": []}',
             "hood/taskbook.json": '{"tasks": []}',
+            "hood/human_pending.json": '{"tasks": []}',
             "hood/whitelist.json": '[]',
             "hood/notebook.md": "",
         }
@@ -99,7 +100,7 @@ if __name__ == "__main__":
                         routine_start = calendar.timegm(time.strptime(routine["start_time"], "%Y-%m-%dT%H:%M:%SZ"))
                         if now >= routine_start and (now - routine_start) % routine["interval"] < heartbeat_interval_seconds:
                             response = prompt(f"[system] This routine just triggered, if it requires a tool, execute, if not, treat as a notification to the user: {routine['task']}")
-                            send_message(f"🔁 {response}")
+                            send_message(f"♾️ {response}")
             except Exception as e:
                 try:
                     error_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")

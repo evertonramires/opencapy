@@ -109,6 +109,13 @@ Misc:
 /help - get the content of this README file
 ```
 
+Human escalation:
+
+```code
+/listpending - list pending human guidance tasks
+/answer 3 proceed with option A - answer pending task id 3
+```
+
 ## Chat API docs
 
 With chat API running, navigate to:

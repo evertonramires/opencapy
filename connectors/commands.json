@@ -57,6 +57,14 @@
             "description": "Get the content of the README.md file"
         },
         {
+            "command": "answer",
+            "description": "Answer a pending human task. Example: /answer 3 yes, continue with option A"
+        },
+        {
+            "command": "listpending",
+            "description": "List pending human guidance tasks"
+        },
+        {
             "command": "whitelist",
             "description": "Add a URL or domain to the internet whitelist. Example: /whitelist https://example.com"
         },

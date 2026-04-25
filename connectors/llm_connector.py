@@ -13,6 +13,16 @@ def _resolve_chat_endpoint(host: str) -> str:
     return f"{base}/v1/chat/completions"
 
 
+def _extract_original_user_prompt(text: str) -> str:
+    marker = "Prompt:\n"
+    if marker in text:
+        prompt_text = text.split(marker, 1)[1].strip()
+        if prompt_text.startswith("User said: "):
+            return prompt_text[len("User said: "):].strip()
+        return prompt_text
+    return text
+
+
 def prompt_model(text: str, tools=None, tool_handlers=None) -> str:
     host = os.getenv("LLM_API_HOST", "")
     key = os.getenv("LLM_API_KEY")
@@ -49,6 +59,8 @@ def prompt_model(text: str, tools=None, tool_handlers=None) -> str:
             for tool_call in assistant_msg["tool_calls"]:
                 name = tool_call["function"]["name"]
                 args = json.loads(tool_call["function"]["arguments"])
+                if name == "ask_human":
+                    args.setdefault("original_user_prompt", _extract_original_user_prompt(text))
                 try:
                     result = tool_handlers[name](**args)
                 except Exception as e:

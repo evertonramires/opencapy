@@ -71,6 +71,10 @@
         {
             "command": "commands",
             "description": "List all available commands"
+        },
+        {
+            "command": "checkinternet",
+            "description": "Check internet connectivity and show Cloudflare trace diagnostics"
         }
     ]
 }

@@ -8,6 +8,7 @@ from connectors.clock_connector import get_time
 from connectors.taskbook_connector import add_task, delete_task, read_tasks
 from connectors.routines_connector import add_routine, delete_routine, read_routines
 from connectors.whitelist_connector import add_to_whitelist, remove_from_whitelist, read_whitelist
+from connectors.internet_connector import check_internet_connection
 from agent import prompt
 
 def register_commands():
@@ -134,6 +135,19 @@ def read_messages():
                     commands = json.load(f)["commands"]
                 command_list = "\n".join([f"/{c['command']} - {c['description']}" for c in commands])
                 send_message(f"Available commands:\n{command_list}")
+            elif "/checkinternet" in message:
+                internet = check_internet_connection()
+                send_message(
+                    "🌐 Internet check:\n"
+                    f"Status: {internet['connection_state']}\n"
+                    f"Public IP: {internet['public_ip']}\n"
+                    f"Country: {internet['client_country_code']}\n"
+                    f"Datacenter: {internet['edge_datacenter']}\n"
+                    f"HTTP: {internet['http_protocol']}\n"
+                    f"TLS: {internet['tls_version']}\n"
+                    f"WARP: {internet['using_warp']}\n"
+                    f"Gateway: {internet['using_gateway']}"
+                )
             elif "/model" in message:
                 send_message(os.getenv("LLM_MODEL", "unknown"))
             elif "/help" in message:

@@ -74,7 +74,7 @@ if __name__ == "__main__":
             subprocess.Popen(["uvicorn", "api.api:app", "--host", chat_api_bind_host, "--port", chat_api_bind_port], stdout=subprocess.DEVNULL)
         except Exception as e:
             print(f"⚠️ Failed to start API: {e}")
-        time.sleep(5)  # Wait for API server to start
+        time.sleep(2)  # Wait for API server to start
         print("\n\n⚙️ Waking up your Capy, this may take a minute..")
         send_message("⚙️ Waking up your Capy, this may take a minute...")
         wake_message = prompt(f"[system] Wake up! tell the user that you just woke up in a fun, playful way!")

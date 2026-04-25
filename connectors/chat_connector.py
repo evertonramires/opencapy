@@ -9,6 +9,7 @@ from connectors.taskbook_connector import add_task, delete_task, read_tasks
 from connectors.routines_connector import add_routine, delete_routine, read_routines
 from connectors.whitelist_connector import add_to_whitelist, remove_from_whitelist, read_whitelist
 from connectors.internet_connector import check_internet_connection
+from connectors.update_connector import run_self_update, restart_process
 from agent import prompt
 
 def register_commands():
@@ -148,6 +149,21 @@ def read_messages():
                     f"WARP: {internet['using_warp']}\n"
                     f"Gateway: {internet['using_gateway']}"
                 )
+            elif "/update" in message:
+                try:
+                    send_message("🔄 Running self update...")
+                    update_result = run_self_update()
+                    send_message(update_result["message"])
+                    if update_result["restart_needed"]:
+                        restart_process()
+                except Exception as e:
+                    send_message(f"Sorry, I couldn't update right now, can we try again? Details: {e}")
+            elif "/restart" in message:
+                try:
+                    send_message("🔄 Restarting now...")
+                    restart_process()
+                except Exception as e:
+                    send_message(f"Sorry, I couldn't restart right now, can we try again? Details: {e}")
             elif "/model" in message:
                 send_message(os.getenv("LLM_MODEL", "unknown"))
             elif "/help" in message:

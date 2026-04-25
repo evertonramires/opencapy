@@ -75,6 +75,14 @@
         {
             "command": "internet",
             "description": "Check internet connectivity and show Cloudflare trace diagnostics"
+        },
+        {
+            "command": "update",
+            "description": "Run git pull, update Python dependencies, and restart if needed"
+        },
+        {
+            "command": "restart",
+            "description": "Restart the system"
         }
     ]
 }

@@ -8,8 +8,13 @@ load_dotenv()
 telegram_enabled = os.getenv("ENABLE_TELEGRAM", "false").lower()
 telegram_token = os.getenv("TELEGRAM_TOKEN")
 telegram_chat_id = os.getenv("TELEGRAM_CHAT_ID")
+telegram_state_file = "hood/telegram_state.json"
 
-last_received_update_id = 0
+if os.path.exists(telegram_state_file):
+	with open(telegram_state_file) as f:
+		last_received_update_id = json.load(f).get("last_received_update_id", 0)
+else:
+	last_received_update_id = 0
 _typing_stop_event = None
 
 def send_telegram_message(message: str) -> None:
@@ -83,6 +88,8 @@ def read_telegram_messages() -> list[str]:
 	updates = response.json()["result"]
 	if updates and len(updates) > 0:
 		last_received_update_id = updates[-1]["update_id"]
+		with open(telegram_state_file, "w") as f:
+			json.dump({"last_received_update_id": last_received_update_id}, f)
 	return [
 		update["message"]["text"]
 		for update in updates

@@ -53,6 +53,7 @@ if __name__ == "__main__":
             "hood/routines.json": '{"routines": []}',
             "hood/taskbook.json": '{"tasks": []}',
             "hood/human_pending.json": '{"tasks": []}',
+            "hood/calendar_oauth.json": '{"state": "", "refresh_token": "", "redirect_uri": ""}',  
             "hood/whitelist.json": '[]',
             "hood/notebook.md": "",
         }

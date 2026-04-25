@@ -95,6 +95,26 @@ Tools:
 /listtools - list all available tools
 ```
 
+Google Calendar:
+
+- Configure OAuth in `.env`: `CALENDAR_ID`, `CALENDAR_OAUTH_CLIENT_ID`, `CALENDAR_OAUTH_CLIENT_SECRET`, `CALENDAR_OAUTH_REDIRECT_URI`.
+- `CALENDAR_OAUTH_REDIRECT_URI` is independent from `CHAT_API_HOST`, so you can keep the API local and point only the OAuth callback to a temporary HTTPS tunnel.
+- In Google Cloud Console, add your redirect URI (for example `http://localhost:8000/oauth/calendar/callback`) to your OAuth client.
+- Start OAuth using `/calendarauth`, then open the auth link returned by Capy.
+- If callback host is localhost, open the OAuth link on the same machine running Capy.
+- If callback host is not localhost, make sure that callback host address is reachable by the device opening the OAuth popup.
+- After Google redirects back to callback, refresh token is validated and saved automatically in `hood/calendar_oauth.json`.
+- Optional defaults: `CALENDAR_DEFAULT_DAYS_AHEAD`, `CALENDAR_DEFAULT_MAX_RESULTS`.
+- Manual calendar commands:
+
+```code
+/calendarauth - start OAuth and get clickable auth link
+/listcalendar - list upcoming events using defaults from .env
+/listcalendar 14 20 - list 20 events for the next 14 days
+/addcalendarevent Team sync | 2026-04-25T14:00:00Z | 2026-04-25T14:30:00Z | Weekly check-in
+/deletecalendarevent <event_id>
+```
+
 Identity:
 
 ```code

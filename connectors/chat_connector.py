@@ -7,6 +7,12 @@ from connectors.tools_connector import list_tools
 from connectors.clock_connector import get_time
 from connectors.taskbook_connector import add_task, delete_task, read_tasks
 from connectors.routines_connector import add_routine, delete_routine, read_routines
+from connectors.calendar_connector import (
+    create_calendar_oauth_session,
+    list_calendar_events,
+    add_calendar_event,
+    delete_calendar_event,
+)
 from connectors.human_connector import read_human_tasks, get_human_task, delete_human_task
 from connectors.whitelist_connector import add_to_whitelist, remove_from_whitelist, read_whitelist
 from connectors.internet_connector import check_internet_connection
@@ -101,6 +107,85 @@ def read_messages():
                     send_message(f"Routine {routine_id} deleted.")
                 except Exception as e:
                     send_message(f"Sorry, I couldn't delete the routine, can we try again? Details: {e}")
+            elif _is_command(message, "/calendarauth"):
+                try:
+                    result = create_calendar_oauth_session()
+                    if result.get("status") == "error":
+                        send_message(f"Sorry, I couldn't start calendar OAuth. {result.get('message')}")
+                        continue
+                    send_message(
+                        "🔐 Google Calendar OAuth started.\n"
+                        f"Open this link:\n{result.get('auth_url')}\n\n"
+                        f"{result.get('network_hint', '')}\n\n"
+                        "After approval, the callback validates automatically in this system."
+                    )
+                except Exception as e:
+                    send_message(f"Sorry, I couldn't start calendar OAuth, can we try again? Details: {e}")
+            elif _is_command(message, "/listcalendar"):
+                try:
+                    raw = message[len("/listcalendar"):].strip()
+                    days_ahead = int(os.getenv("CALENDAR_DEFAULT_DAYS_AHEAD", "7"))
+                    max_results = int(os.getenv("CALENDAR_DEFAULT_MAX_RESULTS", "10"))
+                    if raw:
+                        args = raw.split()
+                        if len(args) >= 1:
+                            days_ahead = int(args[0])
+                        if len(args) >= 2:
+                            max_results = int(args[1])
+                    events = list_calendar_events(days_ahead=days_ahead, max_results=max_results)
+                    if isinstance(events, dict) and events.get("status") == "error":
+                        send_message(f"Sorry, I couldn't list calendar events. {events.get('message')}\nDetails: {events.get('details', '')}")
+                        continue
+                    if not events:
+                        send_message("📅 No upcoming calendar events found.")
+                        continue
+                    event_list = "\n".join([
+                        f"[{event['start']}] {event.get('summary', '(no title)')} - id: {event['id']}"
+                        for event in events
+                    ])
+                    send_message(f"📅 Upcoming calendar events:\n{event_list}")
+                except Exception as e:
+                    send_message(f"Sorry, I couldn't list calendar events, can we try again? Details: {e}")
+            elif _is_command(message, "/addcalendarevent"):
+                try:
+                    raw = message[len("/addcalendarevent"):].strip()
+                    parts = [part.strip() for part in raw.split("|")]
+                    if len(parts) < 3 or not parts[0] or not parts[1] or not parts[2]:
+                        send_message(
+                            "Usage: /addcalendarevent <summary> | <start_iso_utc> | <end_iso_utc> | <optional_description>\n"
+                            "Example: /addcalendarevent Team sync | 2026-04-25T14:00:00Z | 2026-04-25T14:30:00Z | Weekly check-in"
+                        )
+                        continue
+                    summary = parts[0]
+                    start_time = parts[1]
+                    end_time = parts[2]
+                    description = parts[3] if len(parts) > 3 else ""
+                    result = add_calendar_event(summary, start_time, end_time, description)
+                    if result.get("status") == "error":
+                        send_message(f"Sorry, I couldn't add the calendar event. {result.get('message')}\nDetails: {result.get('details', '')}")
+                        continue
+                    event = result.get("event", {})
+                    send_message(
+                        f"📅 Event created: {event.get('summary', summary)}\n"
+                        f"ID: {event.get('id')}\n"
+                        f"Start: {event.get('start')}\n"
+                        f"End: {event.get('end')}"
+                    )
+                except Exception as e:
+                    send_message(f"Sorry, I couldn't add the calendar event, can we try again? Details: {e}")
+            elif _is_command(message, "/deletecalendarevent"):
+                try:
+                    event_id = message[len("/deletecalendarevent"):].strip()
+                    if not event_id:
+                        send_message("Usage: /deletecalendarevent <event_id>\nUse /listcalendar to find event ids.")
+                        continue
+                    result = delete_calendar_event(event_id)
+                    if result.get("status") == "error":
+                        send_message(f"Sorry, I couldn't delete the calendar event. {result.get('message')}\nDetails: {result.get('details', '')}")
+                        continue
+                    send_message(f"🗑️ Calendar event {event_id} deleted.")
+                except Exception as e:
+                    send_message(f"Sorry, I couldn't delete the calendar event, can we try again? Details: {e}")
             elif _is_command(message, "/answer"):
                 try:
                     raw = message[len("/answer"):].strip()

@@ -30,11 +30,18 @@ def ask_smarter(question: str, tools=None, tool_handlers={}) -> str:
                 for tool_call in assistant_msg["tool_calls"]:
                     name = tool_call["function"]["name"]
                     args = json.loads(tool_call["function"]["arguments"])
-                    result = tool_handlers[name](**args)
+                    try:
+                        result = tool_handlers[name](**args)
+                    except Exception as e:
+                        result = {
+                            "status": "error",
+                            "tool": name,
+                            "message": f"Tool execution failed: {str(e)}",
+                        }
                     messages.append({
                         "role": "tool",
                         "tool_call_id": tool_call["id"],
-                        "content": str(result),
+                        "content": json.dumps(result) if isinstance(result, dict) else str(result),
                     })
             else:
                 return choice["message"]["content"]

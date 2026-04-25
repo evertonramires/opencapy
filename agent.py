@@ -53,7 +53,7 @@ def prompt(text: str) -> str:
     notes = read_notes()
     current_time, timezone = load_time_info()
     tools, handlers = _load_tools()
-    full_prompt = f"System Rules:\n{system_prompt}\n\nYour Identity:\n{identity}\n\nYour Memory:\n{memory_text}\n\nYour Notes:\n{notes}\n\nCurrent system time: UTC:{current_time}, User timezone:{timezone}\n\nPrompt:\n{text}"
+    full_prompt = f"System Rules:\n{system_prompt}\n\nYour Identity:\n{identity}\n\nYour Memory:\n{memory_text}\n\nYour Notes:\n{notes}\n\nCurrent system UTC time: {current_time}[UTC], User timezone:{timezone}\n\nPrompt:\n{text}"
     response = prompt_model(full_prompt, tools=tools, tool_handlers=handlers)
     add_memory(connector_get_time("utc"), text, "user")
     add_memory(connector_get_time("utc"), response, "you")

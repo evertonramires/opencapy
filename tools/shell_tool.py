@@ -3,7 +3,7 @@ from connectors.shell_connector import run_shell_command as connector_run_shell_
 
 
 def run_shell_command(command: str) -> str:
-    notify_tool_use("🔧🐚 Linux shell tool used to run a host command.")
+    notify_tool_use(f"🔧🐚 Shell tool used with command:\n\n{command}")
     return connector_run_shell_command(command)
 
 

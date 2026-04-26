@@ -4,7 +4,7 @@ from connectors.github_connector import (
     get_github_repo as connector_get_github_repo,
     get_github_issues as connector_get_github_issues,
     get_github_releases as connector_get_github_releases,
-    # get_github_file as connector_get_github_file,
+    get_github_file as connector_get_github_file,
 )
 
 def search_github(query: str, type: str) -> list[dict]:
@@ -23,9 +23,9 @@ def get_github_releases(owner: str, repo: str) -> list[dict]:
     notify_tool_use(f"🔧🐙🚀 GitHub tool used to get releases for {owner}/{repo}.")
     return connector_get_github_releases(owner, repo)
 
-# def get_github_file(owner: str, repo: str, path: str) -> str:
-#     notify_tool_use(f"🔧🐙 github_tool.get_github_file called")
-#     return connector_get_github_file(owner, repo, path)
+def get_github_file(owner: str, repo: str, path: str) -> str:
+    notify_tool_use(f"🔧🐙 github_tool.get_github_file called")
+    return connector_get_github_file(owner, repo, path)
 
 search_github_tool = {
     "type": "function",

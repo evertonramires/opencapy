@@ -4,7 +4,12 @@ import requests
 from dotenv import load_dotenv
 load_dotenv()
 
+def smarter_enabled() -> bool:
+    return os.getenv("ENABLE_SMARTER", "false").lower() in ["true", "1", "yes"]
+
 def ask_smarter(question: str, tools=None, tool_handlers={}) -> str:
+    if not smarter_enabled():
+        return "Sorry, I can't help. Smarter LLM is disabled. To enable it, set ENABLE_SMARTER=true in your .env file."
     host = os.getenv("SMARTER_LLM_API_HOST")
     key = os.getenv("SMARTER_LLM_API_KEY")
     model = os.getenv("SMARTER_LLM_MODEL")

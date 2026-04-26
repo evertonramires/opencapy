@@ -7,10 +7,11 @@ from urllib.parse import quote, urlparse, urlencode
 
 import requests
 
-
 _oauth_state_path = Path(__file__).resolve().parent.parent / "hood" / "calendar_oauth.json"
 _env_path = Path(__file__).resolve().parent.parent / ".env"
 
+def calendar_enabled() -> bool:
+    return os.getenv("ENABLE_CALENDAR", "false").lower() in ["true", "1", "yes"]
 
 def _read_dotenv_value(key: str) -> str:
     if not _env_path.exists():
@@ -83,6 +84,12 @@ def _oauth_network_hint(redirect_uri: str) -> str:
 
 
 def create_calendar_oauth_session(redirect_uri: str = "") -> dict:
+    if not calendar_enabled():
+        return {
+            "status": "error",
+            "tool": "calendar",
+            "message": "Calendar tool is disabled. To enable it, set ENABLE_CALENDAR=true in your .env file.",
+        }
     client_id = _env_value("CALENDAR_OAUTH_CLIENT_ID", "")
     if not client_id:
         return {
@@ -240,6 +247,12 @@ def _calendar_url(calendar_id: str, event_id: str = "") -> str:
 
 
 def list_calendar_events(days_ahead: int = 7, max_results: int = 10) -> list[dict] | dict:
+    if not calendar_enabled():
+        return {
+            "status": "error",
+            "tool": "calendar",
+            "message": "Calendar tool is disabled. To enable it, set ENABLE_CALENDAR=true in your .env file.",
+        }
     calendar_id = _calendar_id
     if not calendar_id:
         return {
@@ -293,6 +306,12 @@ def add_calendar_event(
     end_time: str,
     description: str = "",
 ) -> dict:
+    if not calendar_enabled():
+        return {
+            "status": "error",
+            "tool": "calendar",
+            "message": "Calendar tool is disabled. To enable it, set ENABLE_CALENDAR=true in your .env file.",
+        }
     calendar_id = _calendar_id
     if not calendar_id:
         return {
@@ -337,6 +356,12 @@ def add_calendar_event(
 
 
 def delete_calendar_event(event_id: str) -> dict:
+    if not calendar_enabled():
+        return {
+            "status": "error",
+            "tool": "calendar",
+            "message": "Calendar tool is disabled. To enable it, set ENABLE_CALENDAR=true in your .env file.",
+        }
     calendar_id = _calendar_id
     if not calendar_id:
         return {

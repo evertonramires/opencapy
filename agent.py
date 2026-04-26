@@ -5,7 +5,6 @@ from connectors.llm_connector import prompt_model
 from connectors.memory_connector import add_memory, read_memory, prune_memory
 from connectors.clock_connector import get_time as connector_get_time
 from connectors.notebook_connector import read_notes
-from connectors.shell_connector import shell_enabled
 
 identity_path = os.path.join(os.path.dirname(__file__), "IDENTITY.md")
 system_prompt_path = os.path.join(os.path.dirname(__file__), "SYSTEM_PROMPT.md")
@@ -18,8 +17,6 @@ def _load_tools():
     handlers = {}
     for filename in os.listdir(_tools_dir):
         if not filename.endswith("_tool.py"):
-            continue
-        if filename == "shell_tool.py" and not shell_enabled():
             continue
         name = filename[:-3]
         spec = importlib.util.spec_from_file_location(name, os.path.join(_tools_dir, filename))

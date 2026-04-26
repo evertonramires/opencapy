@@ -1,12 +1,13 @@
 import os
 import subprocess
 
-
 def shell_enabled() -> bool:
-    return os.getenv("ENABLE_SHELL_TOOL", "false").lower() in ["true", "1", "yes"]
+    return os.getenv("ENABLE_SHELL", "false").lower() in ["true", "1", "yes"]
 
 
 def run_shell_command(command: str) -> str:
+    if not shell_enabled():
+        return "Shell tool is disabled. To enable it, set ENABLE_SHELL=true in your .env file."
     try:
         completed = subprocess.run(
             command,

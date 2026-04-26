@@ -4,6 +4,9 @@ from urllib.parse import urlparse
 
 _whitelist_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "hood", "whitelist.json")
 
+def internet_enabled() -> bool:
+    return os.getenv("ENABLE_INTERNET", "false").lower() in ["true", "1", "yes"]
+
 def _ensure_whitelist():
     if not os.path.exists(_whitelist_path):
         with open(_whitelist_path, "w") as f:
@@ -14,6 +17,8 @@ def _extract_domain(raw: str) -> str:
     return urlparse(raw).hostname or raw
 
 def add_to_whitelist(raw: str) -> str:
+    if not internet_enabled():
+        return "Internet tool is disabled. To enable it, set ENABLE_INTERNET=true in your .env file."
     _ensure_whitelist()
     domain = _extract_domain(raw)
     with open(_whitelist_path) as f:
@@ -25,6 +30,8 @@ def add_to_whitelist(raw: str) -> str:
     return domain
 
 def remove_from_whitelist(raw: str) -> str | None:
+    if not internet_enabled():
+        return "Internet tool is disabled. To enable it, set ENABLE_INTERNET=true in your .env file."
     _ensure_whitelist()
     domain = _extract_domain(raw)
     with open(_whitelist_path) as f:
@@ -37,6 +44,8 @@ def remove_from_whitelist(raw: str) -> str | None:
     return domain
 
 def read_whitelist() -> list[str]:
+    if not internet_enabled():
+        return ["Internet tool is disabled. To enable it, set ENABLE_INTERNET=true in your .env file."]
     _ensure_whitelist()
     with open(_whitelist_path) as f:
         return json.load(f)

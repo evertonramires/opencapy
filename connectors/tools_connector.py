@@ -1,7 +1,6 @@
 import os
 import importlib.util
 from dotenv import load_dotenv
-from connectors.shell_connector import shell_enabled
 load_dotenv()
 
 announce_tool_calls = os.getenv("ANNOUNCE_TOOL_CALLS", "false").lower()
@@ -17,8 +16,6 @@ def list_tools() -> str:
     human_readable_tools = ""
     for filename in os.listdir(tools_dir):
         if filename.endswith("_tool.py"):
-            if filename == "shell_tool.py" and not shell_enabled():
-                continue
             name = filename[:-3]
             spec = importlib.util.spec_from_file_location(name, os.path.join(tools_dir, filename))
             if spec is None:

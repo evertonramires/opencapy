@@ -1,6 +1,9 @@
 import os
 import requests
 
+def email_enabled() -> bool:
+    return os.getenv("ENABLE_EMAIL", "false").lower() in ["true", "1", "yes"]
+
 def _auth() -> tuple[str, str]:
     return ("api", os.getenv("MAILGUN_API_KEY", ""))
 
@@ -8,6 +11,8 @@ def _domain():
     return os.getenv("MAILGUN_DOMAIN")
 
 def send_email(to: str, subject: str, body: str) -> dict:
+    if not email_enabled():
+        return {"status": "error", "message": "Email tool is disabled. To enable it, set ENABLE_EMAIL=true in your .env file."}
     response = requests.post(
         f"https://api.mailgun.net/v3/{_domain()}/messages",
         auth=_auth(),
@@ -21,6 +26,8 @@ def send_email(to: str, subject: str, body: str) -> dict:
     return {"status": response.status_code, "message": response.text}
 
 def read_emails(count: int) -> list[dict]:
+    if not email_enabled():
+        return [{"status": "error", "message": "Email tool is disabled. To enable it, set ENABLE_EMAIL=true in your .env file."}]
     events = requests.get(
         f"https://api.mailgun.net/v3/{_domain()}/events",
         auth=_auth(),

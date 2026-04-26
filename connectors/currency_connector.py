@@ -1,4 +1,8 @@
+import os
 import requests
+
+def currency_enabled() -> bool:
+    return os.getenv("ENABLE_CURRENCY", "false").lower() in ["true", "1", "yes"]
 
 def _get_crypto_rate(base: str, target: str) -> dict:
     search = requests.get(
@@ -18,6 +22,12 @@ def _get_crypto_rate(base: str, target: str) -> dict:
     }
 
 def get_currency(base: str, target: str) -> dict:
+    if not currency_enabled():
+        return {
+            "status": "error",
+            "tool": "currency",
+            "message": "Currency tool is disabled. To enable it, set ENABLE_CURRENCY=true in your .env file.",
+        }
     response = requests.get(
         "https://api.frankfurter.dev/v1/latest",
         params={"from": base.upper(), "to": target.upper()},

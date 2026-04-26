@@ -5,6 +5,9 @@ from urllib.parse import urlparse
 
 _whitelist_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "hood", "whitelist.json")
 
+def internet_enabled() -> bool:
+    return os.getenv("ENABLE_INTERNET", "false").lower() in ["true", "1", "yes"]
+
 def _ensure_whitelist():
     if not os.path.exists(_whitelist_path):
         with open(_whitelist_path, "w") as f:
@@ -18,12 +21,16 @@ def _is_allowed(url: str) -> bool:
     return any(host == domain or host.endswith("." + domain) for domain in whitelist)
 
 def browse_internet(url: str) -> dict:
+    if not internet_enabled():
+        return {"status": 403, "body": "Internet access is disabled. To enable it, set ENABLE_INTERNET=true in your .env file."}
     if not _is_allowed(url):
         return {"status": 403, "body": "Domain not in whitelist."}
     response = requests.get(url)
     return {"status": response.status_code, "body": response.text}
 
 def check_internet_connection() -> dict:
+    if not internet_enabled():
+        return {"connected": False, "connection_state": "offline", "message": "Internet access is disabled. To enable it, set ENABLE_INTERNET=true in your .env file."}
     response = requests.get("https://cloudflare.com/cdn-cgi/trace")
     trace = {}
     for line in response.text.strip().splitlines():

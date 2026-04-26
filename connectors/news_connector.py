@@ -1,5 +1,10 @@
+import os
+
 import requests
 import xml.etree.ElementTree as ET
+
+def news_enabled() -> bool:
+    return os.getenv("ENABLE_NEWS", "false").lower() in ["true", "1", "yes"]
 
 _FEEDS = {
     "top":         "https://feeds.bbci.co.uk/news/rss.xml",
@@ -12,6 +17,8 @@ _FEEDS = {
 }
 
 def get_news(topic: str, count: int) -> list[dict]:
+    if not news_enabled():
+        return [{"status": "error", "message": "News tool is disabled. To enable it, set ENABLE_NEWS=true in your .env file."}]
     url = _FEEDS.get(topic, _FEEDS["top"])
     xml = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}).text
     root = ET.fromstring(xml)

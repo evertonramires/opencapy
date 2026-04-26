@@ -1,6 +1,12 @@
+import os
 import requests
 
+def weather_enabled() -> bool:
+    return os.getenv("ENABLE_WEATHER", "false").lower() in ["true", "1", "yes"]
+
 def get_weather(location: str) -> dict:
+    if not weather_enabled():
+        return {"status": "error", "message": "Weather tool is disabled. To enable it, set ENABLE_WEATHER=true in your .env file."}
     geo = requests.get(
         "https://geocoding-api.open-meteo.com/v1/search",
         params={"name": location, "count": 1, "language": "en", "format": "json"},

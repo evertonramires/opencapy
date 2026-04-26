@@ -5,7 +5,6 @@ import requests
 from dotenv import load_dotenv
 load_dotenv()
 
-telegram_enabled = os.getenv("ENABLE_TELEGRAM", "false").lower()
 telegram_token = os.getenv("TELEGRAM_TOKEN")
 telegram_chat_id = os.getenv("TELEGRAM_CHAT_ID")
 telegram_state_file = "hood/telegram_state.json"
@@ -17,12 +16,15 @@ else:
 	last_received_update_id = 0
 _typing_stop_event = None
 
+def telegram_enabled() -> bool:
+	return os.getenv("ENABLE_TELEGRAM", "false").lower() in ["true", "1", "yes"]
+
 def send_telegram_message(message: str) -> None:
 	global _typing_stop_event
 	if _typing_stop_event:
 		_typing_stop_event.set()
 		_typing_stop_event = None
-	if not telegram_token or not telegram_chat_id or telegram_enabled == "false":
+	if not telegram_token or not telegram_chat_id or not telegram_enabled():
 		return
 	if len(message) > 4000:
 		message = message[:3980] + "\n\n(...truncated)"
@@ -37,7 +39,7 @@ def send_telegram_message(message: str) -> None:
 		print(f"⚠️ Failed to send Telegram message.")
 
 def send_telegram_typing_action() -> None:
-	if not telegram_token or not telegram_chat_id or telegram_enabled == "false":
+	if not telegram_token or not telegram_chat_id or not telegram_enabled():
 		return
 	global _typing_stop_event
 	if _typing_stop_event:
@@ -59,7 +61,7 @@ def send_telegram_typing_action() -> None:
 	threading.Thread(target=_loop, daemon=True).start()
 
 def register_telegram_commands() -> None:
-	if not telegram_token or telegram_enabled == "false":
+	if not telegram_token or not telegram_enabled():
 		return
 	with open(os.path.join(os.path.dirname(__file__), "commands.json")) as f:
 		commands = json.load(f)
@@ -75,7 +77,7 @@ def register_telegram_commands() -> None:
 # TODO: convert to webhook
 def read_telegram_messages() -> list[str]:
 	global last_received_update_id
-	if not telegram_token  or telegram_enabled == "false":
+	if not telegram_token  or not telegram_enabled():
 		return []
 	try:
 		response = requests.get(

@@ -10,6 +10,7 @@ load_dotenv()
 from connectors.clock_connector import get_time
 from connectors.taskbook_connector import delete_task, read_tasks
 from connectors.routines_connector import read_routines
+from connectors.calendar_connector import calendar_today
 from agent import prompt
 from connectors.chat_connector import register_commands, send_message, read_messages
 from datetime import datetime
@@ -102,6 +103,11 @@ if __name__ == "__main__":
                         if now >= routine_start and (now - routine_start) % routine["interval"] < heartbeat_interval_seconds:
                             response = prompt(f"[system] This routine just triggered, if it requires a tool, execute, if not, treat as a notification to the user: {routine['task']}")
                             send_message(f"♾️ {response}")
+                    calendar_events = calendar_today()
+                    if calendar_events is not False:
+                        response = prompt(f"[system] These are today's calendar events: {calendar_events}. If it requires a tool, execute, if not, treat as a notification to the user.")
+                        send_message(f"📅 {response}")
+
             except Exception as e:
                 try:
                     error_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")

@@ -10,6 +10,8 @@ import requests
 _oauth_state_path = Path(__file__).resolve().parent.parent / "hood" / "calendar_oauth.json"
 _env_path = Path(__file__).resolve().parent.parent / ".env"
 
+calendar_daily_check_hour = int(os.getenv("CALENDAR_DAILY_CHECK_HOUR", 7))
+
 def calendar_enabled() -> bool:
     return os.getenv("ENABLE_CALENDAR", "false").lower() in ["true", "1", "yes"]
 
@@ -35,7 +37,7 @@ def _oauth_redirect_uri() -> str:
 
 
 def _read_oauth_data() -> dict:
-    default = {"state": "", "refresh_token": "", "redirect_uri": ""}
+    default = {"state": "", "refresh_token": "", "redirect_uri": "", "last_daily_check_date": ""}
     if not _oauth_state_path.exists():
         return default
     try:
@@ -45,6 +47,7 @@ def _read_oauth_data() -> dict:
                 "state": data.get("state", ""),
                 "refresh_token": data.get("refresh_token", ""),
                 "redirect_uri": data.get("redirect_uri", ""),
+                "last_daily_check_date": data.get("last_daily_check_date", ""),
             }
     except Exception:
         pass
@@ -73,6 +76,16 @@ def _load_oauth_refresh_token() -> str:
 def _save_oauth_refresh_token(refresh_token: str) -> None:
     data = _read_oauth_data()
     data["refresh_token"] = refresh_token
+    _write_oauth_data(data)
+
+
+def _load_calendar_daily_check_date() -> str:
+    return _read_oauth_data().get("last_daily_check_date", "")
+
+
+def _save_calendar_daily_check_date(date_value: str) -> None:
+    data = _read_oauth_data()
+    data["last_daily_check_date"] = date_value
     _write_oauth_data(data)
 
 
@@ -245,6 +258,17 @@ def _calendar_url(calendar_id: str, event_id: str = "") -> str:
         return f"https://www.googleapis.com/calendar/v3/calendars/{encoded_calendar_id}/events/{encoded_event_id}"
     return f"https://www.googleapis.com/calendar/v3/calendars/{encoded_calendar_id}/events"
 
+def calendar_today() -> list[dict] | dict | bool:
+    if not calendar_enabled():
+        return False
+    now = datetime.now(timezone.utc)
+    if now.hour < calendar_daily_check_hour:
+        return False
+    today = now.date().isoformat()
+    if _load_calendar_daily_check_date() == today:
+        return False
+    _save_calendar_daily_check_date(today)
+    return list_calendar_events(days_ahead=1, max_results=100)
 
 def list_calendar_events(days_ahead: int = 7, max_results: int = 10) -> list[dict] | dict:
     if not calendar_enabled():

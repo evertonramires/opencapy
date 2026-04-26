@@ -21,8 +21,8 @@ def add_calendar_event(
     return connector_add_calendar_event(summary, start_time, end_time, description)
 
 
-def delete_calendar_event(event_id: str) -> dict:
-    notify_tool_use(f"🔧📅❌ Calendar tool used to delete event: {event_id}.")
+def delete_calendar_event(event_id: str, summary: str) -> dict:
+    notify_tool_use(f"🔧📅❌ Calendar tool used to delete event: {summary}.")
     return connector_delete_calendar_event(event_id)
 
 
@@ -91,8 +91,12 @@ delete_calendar_event_tool = {
                     "type": "string",
                     "description": "Event id to delete.",
                 },
+                "summary": {
+                    "type": "string",
+                    "description": "Event title/summary.",
+                },
             },
-            "required": ["event_id"],
+            "required": ["event_id", "summary"],
         },
     },
 }

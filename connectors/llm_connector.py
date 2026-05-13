@@ -8,11 +8,9 @@ load_dotenv()
 
 def _resolve_chat_endpoint(host: str) -> str:
     base = host.rstrip("/")
-    if base.endswith("/v1/chat/completions"):
-        return base
     if base.endswith("/v1"):
         return f"{base}/chat/completions"
-    return f"{base}/v1/chat/completions"
+    return base
 
 
 def _extract_original_user_prompt(text: str) -> str:
@@ -31,7 +29,6 @@ def prompt_model(text: str, tools=None, tool_handlers=None) -> str:
     model = os.getenv("LLM_MODEL")
     temperature = float(os.getenv("LLM_TEMPERATURE", "1.2"))
     top_p = float(os.getenv("LLM_TOP_P", "0.95"))
-    seed = random.randint(1, 2147483647)
     if tool_handlers is None:
         tool_handlers = {}
     messages = [{"role": "user", "content": text}]
@@ -40,7 +37,6 @@ def prompt_model(text: str, tools=None, tool_handlers=None) -> str:
         "messages": messages,
         "temperature": temperature,
         "top_p": top_p,
-        "seed": seed,
     }
     if tools:
         payload["tools"] = tools
@@ -52,6 +48,7 @@ def prompt_model(text: str, tools=None, tool_handlers=None) -> str:
             timeout=600, # 10 minutes timeout for long tasks or slow machines or big models or... you get it
         )
         data = response.json()
+        print(data)
         if "choices" not in data:
             raise RuntimeError(data.get("error", {}).get("message", data))
         choice = data["choices"][0]

@@ -54,6 +54,17 @@ ensure_command() {
 ensure_command git git
 ensure_command curl curl
 
+set_env_value() {
+    key="$1"
+    value="$2"
+
+    if grep -q "^${key}=" .env; then
+        sed -i "s|^${key}=.*|${key}=${value}|" .env
+    else
+        echo "${key}=${value}" >> .env
+    fi
+}
+
 if [ ! -f .env ]; then
     echo ".env file not found. Creating from .env.EXAMPLE..."
 	cp .env.EXAMPLE .env
@@ -65,6 +76,12 @@ if [ ! -f IDENTITY.md ]; then
 fi
 
 source .env
+echo "Installing UV Python"
+curl -LsSf https://astral.sh/uv/install.sh | sh # installs uv python
+echo "Installing dependencies..."
+uv venv
+source .venv/bin/activate
+uv pip install -r requirements.txt
 echo "LLM setup:"
 echo "1) Download local model with LM Studio"
 echo "2) Use remote LLM API key"
@@ -72,25 +89,25 @@ read -rp "Choose [1/2]: " llm_choice
 llm_choice="${llm_choice:-2}"
 
 if [ "$llm_choice" = "1" ]; then
-    if [ "$ENABLE_LMSTUDIO" = "true" ] && [ -n "$LLM_MODEL" ]; then
+    set_env_value ENABLE_LMSTUDIO true
+    ENABLE_LMSTUDIO=true
+    echo "Enabled ENABLE_LMSTUDIO=true in .env."
+
+    if [ -n "$LLM_MODEL" ]; then
         echo "Installing LM Studio"
         curl -fsSL https://lmstudio.ai/install.sh | bash # installs lmstudio cli
         echo "Downloading and loading LLM model from .env: $LLM_MODEL"
         lms get "$LLM_MODEL" -y
         lms load "$LLM_MODEL"
     else
-        echo "Local model setup requires ENABLE_LMSTUDIO=true and LLM_MODEL in .env."
+        echo "Local model setup requires LLM_MODEL in .env."
     fi
 else
+    set_env_value ENABLE_LMSTUDIO false
+    ENABLE_LMSTUDIO=false
+    echo "Disabled ENABLE_LMSTUDIO in .env."
     echo "Using remote LLM API key from .env."
 fi
-echo "Installing UV Python"
-curl -LsSf https://astral.sh/uv/install.sh | sh # installs uv python
-echo "Installing dependencies..."
-uv venv
-source .venv/bin/activate
-uv pip install -r requirements.txt
-
 echo "Installation complete."
 echo ""
 echo "Before starting the service, review and edit these files if needed:"

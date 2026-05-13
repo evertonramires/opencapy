@@ -1,5 +1,59 @@
 #!/bin/bash
 
+run_privileged() {
+    if [ "$(id -u)" -eq 0 ]; then
+        "$@"
+    else
+        sudo "$@"
+    fi
+}
+
+install_package() {
+    package_name="$1"
+
+    if command -v apt-get >/dev/null 2>&1; then
+        run_privileged apt-get update
+        run_privileged apt-get install -y "$package_name"
+        return
+    fi
+
+    if command -v dnf >/dev/null 2>&1; then
+        run_privileged dnf install -y "$package_name"
+        return
+    fi
+
+    if command -v yum >/dev/null 2>&1; then
+        run_privileged yum install -y "$package_name"
+        return
+    fi
+
+    if command -v pacman >/dev/null 2>&1; then
+        run_privileged pacman -Sy --noconfirm "$package_name"
+        return
+    fi
+
+    if command -v apk >/dev/null 2>&1; then
+        run_privileged apk add "$package_name"
+        return
+    fi
+
+    echo "No supported package manager found. Please install $package_name manually."
+    exit 1
+}
+
+ensure_command() {
+    command_name="$1"
+    package_name="$2"
+
+    if ! command -v "$command_name" >/dev/null 2>&1; then
+        echo "$command_name not found. Installing..."
+        install_package "$package_name"
+    fi
+}
+
+ensure_command git git
+ensure_command curl curl
+
 if [ ! -f .env ]; then
     echo ".env file not found. Creating from .env.EXAMPLE..."
 	cp .env.EXAMPLE .env
@@ -11,12 +65,24 @@ if [ ! -f IDENTITY.md ]; then
 fi
 
 source .env
-if [ "$ENABLE_LMSTUDIO" = "true" ] && [ -n "$LLM_MODEL" ]; then
-    echo "Installing LM Studio"
-    curl -fsSL https://lmstudio.ai/install.sh | bash # installs lmstudio cli
-    echo "Downloading and loading LLM model from .env: $LLM_MODEL"
-    lms get "$LLM_MODEL" -y
-    lms load "$LLM_MODEL"
+echo "LLM setup:"
+echo "1) Download local model with LM Studio"
+echo "2) Use remote LLM API key"
+read -rp "Choose [1/2]: " llm_choice
+llm_choice="${llm_choice:-2}"
+
+if [ "$llm_choice" = "1" ]; then
+    if [ "$ENABLE_LMSTUDIO" = "true" ] && [ -n "$LLM_MODEL" ]; then
+        echo "Installing LM Studio"
+        curl -fsSL https://lmstudio.ai/install.sh | bash # installs lmstudio cli
+        echo "Downloading and loading LLM model from .env: $LLM_MODEL"
+        lms get "$LLM_MODEL" -y
+        lms load "$LLM_MODEL"
+    else
+        echo "Local model setup requires ENABLE_LMSTUDIO=true and LLM_MODEL in .env."
+    fi
+else
+    echo "Using remote LLM API key from .env."
 fi
 echo "Installing UV Python"
 curl -LsSf https://astral.sh/uv/install.sh | sh # installs uv python

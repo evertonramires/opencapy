@@ -78,6 +78,7 @@ fi
 source .env
 echo "Installing UV Python"
 curl -LsSf https://astral.sh/uv/install.sh | sh # installs uv python
+export PATH="$HOME/.local/bin:$PATH"
 echo "Installing dependencies..."
 uv venv
 source .venv/bin/activate

@@ -106,17 +106,15 @@ if [ "$llm_choice" = "1" ]; then
 else
     set_env_value ENABLE_LMSTUDIO false
     ENABLE_LMSTUDIO=false
-    echo "Disabled ENABLE_LMSTUDIO in .env."
-    echo "Using remote LLM API key from .env."
 fi
 echo "Installation complete."
 echo ""
-echo "Before starting the service, review and edit these files if needed:"
+echo "Before starting the service, review and edit these files:"
 echo " - $(pwd)/.env"
 echo " - $(pwd)/IDENTITY.md"
 echo ""
 if [ "$ENABLE_LMSTUDIO" = "false" ]; then
-    echo "Since you chose to use a remote LLM API, make sure to set the correct LLM_API_HOST, LLM_API_KEY, and LLM_MODEL in the .env file."
+    echo "Make sure to set the correct LLM_API_HOST, LLM_API_KEY, and LLM_MODEL in the .env file then start the service with ./start.sh"
     exit 0
 fi
 echo "1) Edit these files now and start manually later"

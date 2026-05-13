@@ -115,6 +115,10 @@ echo "Before starting the service, review and edit these files if needed:"
 echo " - $(pwd)/.env"
 echo " - $(pwd)/IDENTITY.md"
 echo ""
+if [ "$ENABLE_LMSTUDIO" = "false" ]; then
+    echo "Since you chose to use a remote LLM API, make sure to set the correct LLM_API_HOST, LLM_API_KEY, and LLM_MODEL in the .env file."
+    exit 0
+fi
 echo "1) Edit these files now and start manually later"
 echo "2) Skip editing and start the service now"
 read -rp "Choose [1/2]: " install_choice

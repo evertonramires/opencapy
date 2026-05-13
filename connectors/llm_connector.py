@@ -8,9 +8,9 @@ load_dotenv()
 
 def _resolve_chat_endpoint(host: str) -> str:
     base = host.rstrip("/")
-    if base.endswith("/v1"):
-        return f"{base}/chat/completions"
-    return base
+    if base.endswith("/completions"):
+        return base
+    return f"{base}/v1/chat/completions"
 
 
 def _extract_original_user_prompt(text: str) -> str:
@@ -24,54 +24,58 @@ def _extract_original_user_prompt(text: str) -> str:
 
 
 def prompt_model(text: str, tools=None, tool_handlers=None) -> str:
-    host = os.getenv("LLM_API_HOST", "")
-    key = os.getenv("LLM_API_KEY")
-    model = os.getenv("LLM_MODEL")
-    temperature = float(os.getenv("LLM_TEMPERATURE", "1.2"))
-    top_p = float(os.getenv("LLM_TOP_P", "0.95"))
-    if tool_handlers is None:
-        tool_handlers = {}
-    messages = [{"role": "user", "content": text}]
-    payload = {
-        "model": model,
-        "messages": messages,
-        "temperature": temperature,
-        "top_p": top_p,
-    }
-    if tools:
-        payload["tools"] = tools
-    while True:
-        response = requests.post(
-            _resolve_chat_endpoint(host),
-            headers={"Authorization": f"Bearer {key}"},
-            json=payload,
-            timeout=600, # 10 minutes timeout for long tasks or slow machines or big models or... you get it
-        )
-        data = response.json()
-        print(data)
-        if "choices" not in data:
-            raise RuntimeError(data.get("error", {}).get("message", data))
-        choice = data["choices"][0]
-        if choice["finish_reason"] == "tool_calls":
-            assistant_msg = choice["message"]
-            messages.append(assistant_msg)
-            for tool_call in assistant_msg["tool_calls"]:
-                name = tool_call["function"]["name"]
-                args = json.loads(tool_call["function"]["arguments"])
-                if name == "ask_human":
-                    args.setdefault("original_user_prompt", _extract_original_user_prompt(text))
-                try:
-                    result = tool_handlers[name](**args)
-                except Exception as e:
-                    result = {
-                        "status": "error",
-                        "tool": name,
-                        "message": f"Tool execution failed: {str(e)}",
-                    }
-                messages.append({
-                    "role": "tool",
-                    "tool_call_id": tool_call["id"],
-                    "content": json.dumps(result) if isinstance(result, dict) else str(result),
-                })
-        else:
-            return choice["message"]["content"]
+    try:
+        host = os.getenv("LLM_API_HOST", "")
+        key = os.getenv("LLM_API_KEY")
+        model = os.getenv("LLM_MODEL")
+        temperature = float(os.getenv("LLM_TEMPERATURE", "1.2"))
+        top_p = float(os.getenv("LLM_TOP_P", "0.95"))
+        if tool_handlers is None:
+            tool_handlers = {}
+        messages = [{"role": "user", "content": text}]
+        payload = {
+            "model": model,
+            "messages": messages,
+            "temperature": temperature,
+            "top_p": top_p,
+        }
+        if tools:
+            payload["tools"] = tools
+        while True:
+            response = requests.post(
+                _resolve_chat_endpoint(host),
+                headers={"Authorization": f"Bearer {key}"},
+                json=payload,
+                timeout=600, # 10 minutes timeout for long tasks or slow machines or big models or... you get it
+            )
+            data = response.json()
+            if "choices" not in data:
+                raise RuntimeError(data)
+            choice = data["choices"][0]
+            if choice["finish_reason"] == "tool_calls":
+                assistant_msg = choice["message"]
+                messages.append(assistant_msg)
+                for tool_call in assistant_msg["tool_calls"]:
+                    name = tool_call["function"]["name"]
+                    args = json.loads(tool_call["function"]["arguments"])
+                    if name == "ask_human":
+                        args.setdefault("original_user_prompt", _extract_original_user_prompt(text))
+                    try:
+                        result = tool_handlers[name](**args)
+                    except Exception as e:
+                        result = {
+                            "status": "error",
+                            "tool": name,
+                            "message": f"Tool execution failed: {str(e)}",
+                        }
+                    messages.append({
+                        "role": "tool",
+                        "tool_call_id": tool_call["id"],
+                        "content": json.dumps(result) if isinstance(result, dict) else str(result),
+                    })
+            else:
+                return choice["message"]["content"]
+    except Exception as e:
+        error_msg = f"⚠️ Failed communicating with LLM model: {str(e)}"
+        print(error_msg)
+        return error_msg

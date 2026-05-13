@@ -2,6 +2,7 @@ import os
 import json
 import time
 import calendar
+import sys
 import subprocess
 import traceback
 from dotenv import load_dotenv
@@ -22,6 +23,8 @@ announce_errors = os.getenv("ANNOUNCE_ERRORS", "false").lower()
 chat_api_host = os.getenv("CHAT_API_HOST", "http://localhost:8000")
 chat_api_bind = chat_api_host.replace("http://", "").replace("https://", "")
 chat_api_bind_host, chat_api_bind_port = chat_api_bind.split(":")
+chat_api_bind_host = os.getenv("CHAT_API_BIND_HOST", chat_api_bind_host)
+chat_api_bind_port = os.getenv("CHAT_API_BIND_PORT", chat_api_bind_port)
     
 now = int(get_time("timestamp"))
 last_heartbeat = now
@@ -74,7 +77,7 @@ if __name__ == "__main__":
 
         register_commands()
         try:
-            subprocess.Popen(["uvicorn", "api.api:app", "--host", chat_api_bind_host, "--port", chat_api_bind_port], stdout=subprocess.DEVNULL)
+            subprocess.Popen([sys.executable, "-m", "uvicorn", "api.api:app", "--host", chat_api_bind_host, "--port", chat_api_bind_port], stdout=subprocess.DEVNULL)
         except Exception as e:
             print(f"⚠️ Failed to start API: {e}")
         time.sleep(2)  # Wait for API server to start

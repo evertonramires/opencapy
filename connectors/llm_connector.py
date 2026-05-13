@@ -10,6 +10,8 @@ def _resolve_chat_endpoint(host: str) -> str:
     base = host.rstrip("/")
     if base.endswith("/v1/chat/completions"):
         return base
+    if base.endswith("/v1"):
+        return f"{base}/chat/completions"
     return f"{base}/v1/chat/completions"
 
 

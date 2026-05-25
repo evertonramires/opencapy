@@ -1,9 +1,9 @@
 from connectors.tools_connector import notify_tool_use
 from connectors.fetch_connector import fetch_url as connector_fetch_url
 
-def fetch_url(url: str, method: str, headers: dict, body: str) -> dict:
+def fetch_url(url: str, method: str, headers: dict | None = None, body: str = "") -> dict:
     notify_tool_use(f"🔧🌐📥 Fetch tool used to make a {method} request to {url}.")
-    return connector_fetch_url(url, method, headers, body)
+    return connector_fetch_url(url, method, headers or {}, body)
 
 fetch_url_tool = {
     "type": "function",

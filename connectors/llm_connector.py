@@ -23,7 +23,7 @@ def _extract_original_user_prompt(text: str) -> str:
     return text
 
 
-def prompt_model(text: str, tools=None, tool_handlers=None, host=None, key=None, model=None) -> str:
+def prompt_model(text: str, tools=None, tool_handlers=None, host=None, key=None, model=None, _allow_fallback=True) -> str:
     try:
         host = host or os.getenv("LLM_API_HOST", "")
         key = key or os.getenv("LLM_API_KEY")
@@ -76,12 +76,14 @@ def prompt_model(text: str, tools=None, tool_handlers=None, host=None, key=None,
             else:
                 return choice["message"]["content"]
     except Exception as e:
+        if not _allow_fallback:
+            raise
         try:
             fallback_host = os.getenv("FALLBACK_LLM_API_HOST")
             fallback_key = os.getenv("FALLBACK_LLM_API_KEY")
             fallback_model = os.getenv("FALLBACK_LLM_MODEL")
             print(f"⚠️ Primary LLM failed, trying fallback model: {fallback_model}")
-            return f"[FALLBACK]{prompt_model(text, tools=tools, tool_handlers=tool_handlers, host=fallback_host, key=fallback_key, model=fallback_model)}"
+            return f"[FALLBACK]{prompt_model(text, tools=tools, tool_handlers=tool_handlers, host=fallback_host, key=fallback_key, model=fallback_model, _allow_fallback=False)}"
         except Exception as fe:
             print(f"⚠️ Fallback LLM also failed: {str(fe)}")
         error_msg = f"⚠️ Failed communicating with LLM model: {str(e)}"

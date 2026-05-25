@@ -1,3 +1,4 @@
+import importlib.util
 import json
 import os
 import requests
@@ -20,6 +21,26 @@ def _extract_original_user_prompt(text: str) -> str:
             return prompt_text[len("User said: "):].strip()
         return prompt_text
     return text
+
+
+def _load_tools_from_disk() -> tuple[list[dict], dict]:
+    tools_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "tools")
+    tools = []
+    handlers = {}
+    for filename in os.listdir(tools_dir):
+        if not filename.endswith("_tool.py"):
+            continue
+        name = filename[:-3]
+        spec = importlib.util.spec_from_file_location(name, os.path.join(tools_dir, filename))
+        if spec is None or spec.loader is None:
+            continue
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        for k, v in vars(module).items():
+            if k.endswith("_tool") and isinstance(v, dict):
+                tools.append(v)
+                handlers[v["function"]["name"]] = getattr(module, v["function"]["name"])
+    return tools, handlers
 
 
 def prompt_model(text: str, tools=None, tool_handlers=None, host=None, key=None, model=None, _allow_fallback=True) -> str:
@@ -72,6 +93,9 @@ def prompt_model(text: str, tools=None, tool_handlers=None, host=None, key=None,
                         "tool_call_id": tool_call["id"],
                         "content": json.dumps(result) if isinstance(result, dict) else str(result),
                     })
+                    if name == "forge_new_tool" and isinstance(result, dict) and result.get("status") == "installed":
+                        tools, tool_handlers = _load_tools_from_disk()
+                        payload["tools"] = tools
             else:
                 return choice["message"]["content"]
     except Exception as e:

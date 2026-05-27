@@ -73,7 +73,9 @@ def prompt_model(text: str, tools=None, tool_handlers=None, host=None, key=None,
                 raise RuntimeError(data)
             choice = data["choices"][0]
             if choice["finish_reason"] == "tool_calls":
-                assistant_msg = choice["message"]
+                assistant_msg = dict(choice["message"])
+                assistant_msg.pop("reasoning_content", None)
+                assistant_msg.pop("reasoning", None)
                 messages.append(assistant_msg)
                 for tool_call in assistant_msg["tool_calls"]:
                     name = tool_call["function"]["name"]

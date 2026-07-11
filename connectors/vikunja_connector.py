@@ -62,7 +62,7 @@ def list_todos(include_done: bool = False) -> list[dict] | dict:
     if not vikunja_enabled():
         return _disabled_error()
     response = requests.get(
-        _api_url("/tasks/all"),
+        _api_url("/tasks"),
         headers=_headers(),
         params={"per_page": 50, "sort_by": "due_date", "order_by": "asc"},
     )

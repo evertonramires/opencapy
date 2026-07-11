@@ -25,6 +25,22 @@
             "description": "Delete a routine by ID. Example: /deleteroutine 1"
         },
         {
+            "command": "addtodo",
+            "description": "Add a to-do to Vikunja. Example: /addtodo Buy groceries"
+        },
+        {
+            "command": "listtodos",
+            "description": "List pending to-dos from Vikunja. Example: /listtodos all (to include done)"
+        },
+        {
+            "command": "donetodo",
+            "description": "Mark a Vikunja to-do as done by ID. Example: /donetodo 12"
+        },
+        {
+            "command": "deletetodo",
+            "description": "Delete a Vikunja to-do by ID. Example: /deletetodo 12"
+        },
+        {
             "command": "calendarauth",
             "description": "Start Google Calendar OAuth and get a clickable auth link"
         },

@@ -9,7 +9,7 @@ run_browser_task_tool = {
     "type": "function",
     "function": {
         "name": "run_browser_task",
-        "description": "Execute a task in the web browser using an AI agent. Use this to interact with websites, click buttons, fill forms, or extract information visually.",
+        "description": "A full web browser controlled by another AI agent. This browser is fully configured by the user including pre-saved credentials. Use this to interact with websites, click buttons, fill forms, or extract information visually, specially for services that require authentication.",
         "parameters": {
             "type": "object",
             "properties": {

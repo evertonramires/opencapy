@@ -13,6 +13,12 @@ from connectors.calendar_connector import (
     add_calendar_event,
     delete_calendar_event,
 )
+from connectors.vikunja_connector import (
+    add_todo,
+    list_todos,
+    complete_todo,
+    delete_todo,
+)
 from connectors.human_connector import read_human_tasks, get_human_task, delete_human_task
 from connectors.whitelist_connector import add_to_whitelist, remove_from_whitelist, read_whitelist
 from connectors.internet_connector import check_internet_connection
@@ -107,6 +113,57 @@ def read_messages():
                     send_message(f"Routine {routine_id} deleted.")
                 except Exception as e:
                     send_message(f"Sorry, I couldn't delete the routine, can we try again? Details: {e}")
+            elif _is_command(message, "/addtodo"):
+                try:
+                    todo_text = message[len("/addtodo"):].strip()
+                    if not todo_text:
+                        send_message("Usage: /addtodo <to-do title>\nExample: /addtodo Buy groceries")
+                        continue
+                    result = add_todo(todo_text)
+                    if result.get("status") == "error":
+                        send_message(f"Sorry, I couldn't add the to-do. {result.get('message')}\nDetails: {result.get('details', '')}")
+                        continue
+                    todo = result.get("todo", {})
+                    send_message(f"✅ To-do added: {todo.get('title', todo_text)} (id: {todo.get('id')})")
+                except Exception as e:
+                    send_message(f"Sorry, I couldn't add the to-do, can we try again? Details: {e}")
+            elif _is_command(message, "/listtodos"):
+                try:
+                    include_done = message[len("/listtodos"):].strip().lower() == "all"
+                    todos = list_todos(include_done=include_done)
+                    if isinstance(todos, dict) and todos.get("status") == "error":
+                        send_message(f"Sorry, I couldn't list the to-dos. {todos.get('message')}\nDetails: {todos.get('details', '')}")
+                        continue
+                    if not todos:
+                        send_message("✅ No pending to-dos found.")
+                        continue
+                    todo_list = "\n".join([
+                        f"{'☑️' if todo['done'] else '⬜'} {todo['id']}. {todo['title']}" + (f" (due {todo['due_date']})" if todo['due_date'] else "")
+                        for todo in todos
+                    ])
+                    send_message(f"✅ Current to-dos:\n{todo_list}")
+                except Exception as e:
+                    send_message(f"Sorry, I couldn't list the to-dos, can we try again? Details: {e}")
+            elif _is_command(message, "/donetodo"):
+                try:
+                    todo_id = int(message[len("/donetodo"):].strip())
+                    result = complete_todo(todo_id)
+                    if result.get("status") == "error":
+                        send_message(f"Sorry, I couldn't complete the to-do. {result.get('message')}\nDetails: {result.get('details', '')}")
+                        continue
+                    send_message(f"☑️ To-do {todo_id} marked as done.")
+                except Exception as e:
+                    send_message(f"Sorry, I couldn't complete the to-do, can we try again? Details: {e}")
+            elif _is_command(message, "/deletetodo"):
+                try:
+                    todo_id = int(message[len("/deletetodo"):].strip())
+                    result = delete_todo(todo_id)
+                    if result.get("status") == "error":
+                        send_message(f"Sorry, I couldn't delete the to-do. {result.get('message')}\nDetails: {result.get('details', '')}")
+                        continue
+                    send_message(f"🗑️ To-do {todo_id} deleted.")
+                except Exception as e:
+                    send_message(f"Sorry, I couldn't delete the to-do, can we try again? Details: {e}")
             elif _is_command(message, "/calendarauth"):
                 try:
                     result = create_calendar_oauth_session()

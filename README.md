@@ -89,6 +89,21 @@ Notes:
 /deletenote 3 - delete note with id 3
 ```
 
+To-dos (Vikunja):
+
+- Configure in `.env`: set `ENABLE_VIKUNJA=true`, `VIKUNJA_API_HOST` (e.g. `https://try.vikunja.io` or your self-hosted instance) and `VIKUNJA_API_TOKEN`.
+- Create the API token in Vikunja under Settings > API Tokens, with permissions for tasks and projects.
+- Optional: `VIKUNJA_DEFAULT_PROJECT_ID` sets the project new to-dos go to (defaults to 1, usually the Inbox).
+- Besides the manual commands below, the agent can manage to-dos on its own through the vikunja tool (add, list, complete, delete, and pick a project).
+
+```code
+/addtodo Buy groceries - add a to-do
+/listtodos - list pending to-dos
+/listtodos all - list all to-dos including done ones
+/donetodo 12 - mark to-do with id 12 as done
+/deletetodo 12 - delete to-do with id 12
+```
+
 Tools:
 
 ```code

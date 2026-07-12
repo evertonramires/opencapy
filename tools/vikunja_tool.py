@@ -7,6 +7,7 @@ from connectors.vikunja_connector import (
     update_todo as connector_update_todo,
     add_subtasks as connector_add_subtasks,
     list_todo_projects as connector_list_todo_projects,
+    subtasks_enabled,
 )
 
 def add_todo(title: str, due_date: str = "", description: str = "", priority: int = 0, project_id: int = 0) -> dict:
@@ -163,28 +164,29 @@ update_todo_tool = {
     },
 }
 
-add_subtasks_tool = {
-    "type": "function",
-    "function": {
-        "name": "add_subtasks",
-        "description": "Break a Vikunja to-do into subtasks (small concrete steps). Each subtask title is automatically prefixed with the parent's name and step number (e.g. '[ change car tyres - 1 ] lift car'), so pass only the bare step titles. The parent's progress bar fills automatically as subtasks get done, which the user finds motivating. Use this whenever a to-do is really a multi-step project. Keep steps small and actionable, 3 to 6 of them.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "parent_todo_id": {
-                    "type": "integer",
-                    "description": "The id of the to-do to break down. Use list_todos to find it.",
+if subtasks_enabled():
+    add_subtasks_tool = {
+        "type": "function",
+        "function": {
+            "name": "add_subtasks",
+            "description": "Break a Vikunja to-do into subtasks (small concrete steps). Each subtask title is automatically prefixed with the parent's name and step number (e.g. '[ change car tyres - 1 ] lift car'), so pass only the bare step titles. The parent's progress bar fills automatically as subtasks get done, which the user finds motivating. Use this whenever a to-do is really a multi-step project. Keep steps small and actionable, 3 to 6 of them.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "parent_todo_id": {
+                        "type": "integer",
+                        "description": "The id of the to-do to break down. Use list_todos to find it.",
+                    },
+                    "titles": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "The subtask titles, in the order they should be done, each a small concrete step (e.g. 'Find the workshop phone number').",
+                    },
                 },
-                "titles": {
-                    "type": "array",
-                    "items": {"type": "string"},
-                    "description": "The subtask titles, in the order they should be done, each a small concrete step (e.g. 'Find the workshop phone number').",
-                },
+                "required": ["parent_todo_id", "titles"],
             },
-            "required": ["parent_todo_id", "titles"],
         },
-    },
-}
+    }
 
 list_todo_projects_tool = {
     "type": "function",

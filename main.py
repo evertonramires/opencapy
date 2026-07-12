@@ -20,6 +20,7 @@ from connectors.vikunja_connector import (
     mark_date_nudge_sent,
     mark_focus_sent,
     mark_todos_seen,
+    subtasks_enabled,
     vikunja_enabled,
 )
 from agent import prompt
@@ -143,12 +144,15 @@ if __name__ == "__main__":
                         else:
                             vikunja_watch_error_notified = False
                             if new_todos:
+                                breakdown_hint = (
+                                    "If one is clearly a multi-step project, break it into 3 to 6 small subtasks with add_subtasks and mention you did, "
+                                    "so its progress bar and Gantt view work; if the breakdown isn't obvious, don't guess, just acknowledge. "
+                                ) if subtasks_enabled() else ""
                                 response = prompt(
                                     "[system] The user just added these to-dos directly in Vikunja (not through you): "
                                     f"{json.dumps(new_todos)}. Acknowledge them in one or two friendly sentences, mentioning the titles. "
                                     "Capturing the thought was the win, so don't demand decisions. "
-                                    "If one is clearly a multi-step project, break it into 3 to 6 small subtasks with add_subtasks and mention you did, "
-                                    "so its progress bar and Gantt view work; if the breakdown isn't obvious, don't guess, just acknowledge. "
+                                    f"{breakdown_hint}"
                                     "Ask at most one short optional question, and only if something is clearly time-sensitive and missing a due date. "
                                     "No guilt, no lectures, no other tools."
                                 )

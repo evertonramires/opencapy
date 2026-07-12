@@ -99,7 +99,7 @@ To-dos (Vikunja):
 - The to-do features are designed to be ADHD-friendly: capturing is instant (no interrogation about details), and starting is helped by `/focus`, which picks exactly one to-do and suggests a first step small enough to take two minutes, offering a check-in afterwards.
 - Optional: `VIKUNJA_DAILY_FOCUS_HOUR` (24h UTC hour, -1 disables) sends one gentle morning message with up to 3 to-dos that matter today and a suggested starter — never the whole list.
 - Optional: `VIKUNJA_DATE_NUDGE_HOUR` (24h UTC hour, -1 disables) sends one daily message listing to-dos without a due date; reply with rough dates ("friday", "next week") and the agent sets them, keeping Vikunja's Gantt timeline useful.
-- The agent breaks multi-step to-dos into subtasks (on its own or when asked), naming each one after the original to-do and step number (e.g. `[ change car tyres - 1 ] lift car`) so steps stay recognizable in the list, and keeps the parent's progress bar in sync as subtasks get done — including ones you tick off directly in the Vikunja app.
+- Optional: with `ENABLE_VIKUNJA_SUBTASKS=true` the agent breaks multi-step to-dos into subtasks (on its own or when asked), naming each one after the original to-do and step number (e.g. `[ change car tyres - 1 ] lift car`) so steps stay recognizable in the list. The parent's progress bar is kept in sync as subtasks get done — including ones you tick off directly in the Vikunja app.
 
 ```code
 /focus - pick one to-do to start now, with a tiny first step

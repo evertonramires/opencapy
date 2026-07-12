@@ -10,6 +10,9 @@ _request_timeout_seconds = 15
 def vikunja_enabled() -> bool:
     return os.getenv("ENABLE_VIKUNJA", "false").lower() in ["true", "1", "yes"]
 
+def subtasks_enabled() -> bool:
+    return vikunja_enabled() and os.getenv("ENABLE_VIKUNJA_SUBTASKS", "false").lower() in ["true", "1", "yes"]
+
 def _disabled_error() -> dict:
     return {"status": "error", "tool": "vikunja", "message": "Vikunja to-do tool is disabled. To enable it, set ENABLE_VIKUNJA=true and configure VIKUNJA_API_HOST and VIKUNJA_API_TOKEN in your .env file."}
 
@@ -115,8 +118,8 @@ def add_subtasks(parent_todo_id: int, titles: list[str]) -> dict:
     """Creates the subtasks in the parent's project, prefixing each title with
     the parent's name and step number (e.g. '[ change car tyres - 1 ] lift car')
     so every step stays visibly connected to the original to-do in the list."""
-    if not vikunja_enabled():
-        return _disabled_error()
+    if not subtasks_enabled():
+        return {"status": "error", "tool": "vikunja", "message": "Subtask splitting is disabled. To enable it, set ENABLE_VIKUNJA_SUBTASKS=true in your .env file."}
     parent_response = _request("get", f"/tasks/{parent_todo_id}")
     if isinstance(parent_response, dict):
         return parent_response

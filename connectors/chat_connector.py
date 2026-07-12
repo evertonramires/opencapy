@@ -1,3 +1,4 @@
+import json
 import os
 from connectors.api_connector import send_api_message, read_api_messages
 from connectors.telegram_connector import send_telegram_message, read_telegram_messages, send_telegram_typing_action, register_telegram_commands
@@ -154,6 +155,24 @@ def read_messages():
                     send_message(f"☑️ To-do {todo_id} marked as done.")
                 except Exception as e:
                     send_message(f"Sorry, I couldn't complete the to-do, can we try again? Details: {e}")
+            elif _is_command(message, "/focus"):
+                try:
+                    todos = list_todos()
+                    if isinstance(todos, dict) and todos.get("status") == "error":
+                        send_message(f"Sorry, I couldn't check the to-dos. {todos.get('message')}\nDetails: {todos.get('details', '')}")
+                        continue
+                    if not todos:
+                        send_message("🎯 Nothing pending, you're all clear! Enjoy it 🎉")
+                        continue
+                    response = prompt(
+                        "[system] The user asked what to focus on right now. These are their pending to-dos: "
+                        f"{json.dumps(todos)}. Pick exactly one (due or overdue first, otherwise the one that unblocks the most), "
+                        "and give a first step so small it takes two minutes. Offer to check in on them in about 25 minutes "
+                        "(if they say yes later, schedule it with the taskbook). Be brief and encouraging, never mention the rest of the list."
+                    )
+                    send_message(f"🎯 {response}")
+                except Exception as e:
+                    send_message(f"Sorry, I couldn't pick a focus, can we try again? Details: {e}")
             elif _is_command(message, "/deletetodo"):
                 try:
                     todo_id = int(message[len("/deletetodo"):].strip())
@@ -333,7 +352,6 @@ def read_messages():
                 whitelist = read_whitelist()
                 send_message(f"📝 Whitelist:\n" + "\n".join(whitelist) if whitelist else "📝 Whitelist is empty.")
             elif _is_command(message, "/commands"):
-                import json
                 with open("connectors/commands.json") as f:
                     commands = json.load(f)["commands"]
                 command_list = "\n".join([f"/{c['command']} - {c['description']}" for c in commands])

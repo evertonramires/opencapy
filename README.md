@@ -95,9 +95,12 @@ To-dos (Vikunja):
 - Create the API token in Vikunja under Settings > API Tokens, with permissions for tasks and projects.
 - Optional: `VIKUNJA_DEFAULT_PROJECT_ID` sets the project new to-dos go to (defaults to 1, usually the Inbox).
 - Besides the manual commands below, the agent can manage to-dos on its own through the vikunja tool (add, list, complete, delete, and pick a project).
-- The agent also watches Vikunja for to-dos you add outside the bot (web/mobile app) and briefly acknowledges them, suggesting a due date when one is missing. `VIKUNJA_WATCH_INTERVAL_SECONDS` controls how often it checks (defaults to 30). The first check after enabling silently marks existing to-dos as known, so only to-dos added afterwards are announced (tracked in `hood/vikunja_seen.json`).
+- The agent also watches Vikunja for to-dos you add outside the bot (web/mobile app) and briefly acknowledges them. `VIKUNJA_WATCH_INTERVAL_SECONDS` controls how often it checks (defaults to 30). The first check after enabling silently marks existing to-dos as known, so only to-dos added afterwards are announced (tracked in `hood/vikunja_seen.json`).
+- The to-do features are designed to be ADHD-friendly: capturing is instant (no interrogation about details), and starting is helped by `/focus`, which picks exactly one to-do and suggests a first step small enough to take two minutes, offering a check-in afterwards.
+- Optional: `VIKUNJA_DAILY_FOCUS_HOUR` (24h UTC hour, -1 disables) sends one gentle morning message with up to 3 to-dos that matter today and a suggested starter — never the whole list.
 
 ```code
+/focus - pick one to-do to start now, with a tiny first step
 /addtodo Buy groceries - add a to-do
 /listtodos - list pending to-dos
 /listtodos all - list all to-dos including done ones

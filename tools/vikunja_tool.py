@@ -31,7 +31,7 @@ add_todo_tool = {
     "type": "function",
     "function": {
         "name": "add_todo",
-        "description": "Add a to-do item to the user's Vikunja to-do list. Use this for things the user wants to remember to do, like shopping items, chores, or errands.",
+        "description": "Add a to-do item to the user's Vikunja to-do list. Use this for things the user wants to remember to do, like shopping items, chores, or errands. Add it immediately with sensible defaults instead of asking clarifying questions first; details can always be added later.",
         "parameters": {
             "type": "object",
             "properties": {

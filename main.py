@@ -13,7 +13,7 @@ from connectors.clock_connector import get_time
 from connectors.taskbook_connector import delete_task, read_tasks
 from connectors.routines_connector import read_routines
 from connectors.calendar_connector import calendar_today
-from connectors.vikunja_connector import check_new_todos, mark_todos_seen, vikunja_enabled
+from connectors.vikunja_connector import check_new_todos, daily_focus_todos, mark_focus_sent, mark_todos_seen, vikunja_enabled
 from agent import prompt
 from connectors.chat_connector import register_commands, send_message, read_messages
 from datetime import datetime
@@ -137,15 +137,32 @@ if __name__ == "__main__":
                             if new_todos:
                                 response = prompt(
                                     "[system] The user just added these to-dos directly in Vikunja (not through you): "
-                                    f"{json.dumps(new_todos)}. Briefly acknowledge you noticed them, mentioning the titles. "
-                                    "If one has no due date, ask if they want to set one. Suggest a priority or extra details only when clearly useful. "
-                                    "If one looks like a duplicate of an existing to-do, point it out. Keep it short, don't use tools unless needed."
+                                    f"{json.dumps(new_todos)}. Acknowledge them in one or two friendly sentences, mentioning the titles. "
+                                    "Capturing the thought was the win, so don't demand decisions. "
+                                    "Ask at most one short optional question, and only if something is clearly time-sensitive and missing a due date. "
+                                    "No guilt, no lectures, don't use tools unless needed."
                                 )
                                 if response.startswith("⚠️ Failed communicating"):
                                     print(f"⚠️ Vikunja watcher: LLM unavailable, will retry announcing new to-dos on the next check.")
                                 else:
                                     send_message(f"👀 {response}")
                                     mark_todos_seen([todo["id"] for todo in new_todos])
+                    focus_todos = daily_focus_todos()
+                    if isinstance(focus_todos, list):
+                        if not focus_todos:
+                            mark_focus_sent()
+                        else:
+                            response = prompt(
+                                "[system] Morning focus time. These are the user's pending to-dos: "
+                                f"{json.dumps(focus_todos)}. Keep this light: pick at most 3 that matter most today "
+                                "(due or overdue first), then suggest exactly one to start with, with a first step so small it takes two minutes. "
+                                "Be brief, warm and encouraging. Never mention how many tasks are pending in total, never guilt about overdue ones."
+                            )
+                            if response.startswith("⚠️ Failed communicating"):
+                                print("⚠️ Vikunja focus: LLM unavailable, will retry on the next heartbeat.")
+                            else:
+                                send_message(f"🎯 {response}")
+                                mark_focus_sent()
 
             except Exception as e:
                 try:

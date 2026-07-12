@@ -1,6 +1,7 @@
 import json
 import os
 import requests
+from datetime import datetime, timezone
 
 _no_due_date = "0001-01-01T00:00:00Z"
 _seen_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "hood", "vikunja_seen.json")
@@ -102,18 +103,24 @@ def delete_todo(todo_id: int) -> dict:
         return _request_error(response)
     return {"status": "success", "message": f"To-do {todo_id} deleted."}
 
-def _read_seen_ids() -> list[int] | None:
-    if not os.path.exists(_seen_path):
-        return None
+def _read_state() -> dict:
     try:
         with open(_seen_path) as f:
-            return json.load(f)["seen_ids"]
+            return json.load(f)
     except Exception:
-        return None
+        return {}
+
+def _write_state(state: dict) -> None:
+    with open(_seen_path, "w") as f:
+        json.dump(state, f)
+
+def _read_seen_ids() -> list[int] | None:
+    return _read_state().get("seen_ids")
 
 def _write_seen_ids(ids: list[int]) -> None:
-    with open(_seen_path, "w") as f:
-        json.dump({"seen_ids": sorted(ids)}, f)
+    state = _read_state()
+    state["seen_ids"] = sorted(ids)
+    _write_state(state)
 
 def mark_todos_seen(todo_ids: list[int]) -> None:
     seen = set(_read_seen_ids() or [])
@@ -145,6 +152,26 @@ def check_new_todos() -> list[dict] | dict:
     new_ids = {task["id"] for task in new_tasks}
     _write_seen_ids(list((set(seen) | current_ids) - new_ids))
     return [_simplify_todo(task) for task in new_tasks]
+
+def daily_focus_todos() -> list[dict] | dict | bool:
+    """Once a day at VIKUNJA_DAILY_FOCUS_HOUR (UTC, -1 disables), returns the
+    pending to-dos for the morning focus message. Returns False when it's not
+    time yet or already sent today — the caller must mark_focus_sent after
+    successfully sending, so a failure is retried on the next heartbeat."""
+    focus_hour = int(os.getenv("VIKUNJA_DAILY_FOCUS_HOUR", "-1"))
+    if not vikunja_enabled() or focus_hour < 0:
+        return False
+    now = datetime.now(timezone.utc)
+    if now.hour < focus_hour:
+        return False
+    if _read_state().get("last_focus_date") == now.date().isoformat():
+        return False
+    return list_todos()
+
+def mark_focus_sent() -> None:
+    state = _read_state()
+    state["last_focus_date"] = datetime.now(timezone.utc).date().isoformat()
+    _write_state(state)
 
 def list_todo_projects() -> list[dict] | dict:
     if not vikunja_enabled():

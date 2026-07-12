@@ -13,6 +13,7 @@ from connectors.clock_connector import get_time
 from connectors.taskbook_connector import delete_task, read_tasks
 from connectors.routines_connector import read_routines
 from connectors.calendar_connector import calendar_today
+from connectors.vikunja_connector import check_new_todos, mark_todos_seen, vikunja_enabled
 from agent import prompt
 from connectors.chat_connector import register_commands, send_message, read_messages
 from datetime import datetime
@@ -20,6 +21,9 @@ from datetime import datetime
 
 heartbeat_interval_seconds = int(os.getenv("HEARTBEAT_INTERVAL_SECONDS", 10))
 announce_errors = os.getenv("ANNOUNCE_ERRORS", "false").lower()
+vikunja_watch_interval_seconds = int(os.getenv("VIKUNJA_WATCH_INTERVAL_SECONDS", 30))
+last_vikunja_check = 0
+vikunja_watch_error_notified = False
 
 chat_api_host = os.getenv("CHAT_API_HOST", "http://localhost:8000")
 chat_api_bind = chat_api_host.replace("http://", "").replace("https://", "")
@@ -119,6 +123,29 @@ if __name__ == "__main__":
                     if calendar_events is not False:
                         response = prompt(f"[system] These are today's calendar events: {calendar_events}. If it requires a tool, execute, if not, treat as a notification to the user.")
                         send_message(f"📅 {response}")
+                    if vikunja_enabled() and now - last_vikunja_check >= vikunja_watch_interval_seconds:
+                        last_vikunja_check = now
+                        new_todos = check_new_todos()
+                        if isinstance(new_todos, dict):
+                            if not vikunja_watch_error_notified:
+                                vikunja_watch_error_notified = True
+                                if announce_errors == "true":
+                                    send_message(f"⚠️ Vikunja watcher: {new_todos.get('message')}")
+                                print(f"⚠️ Vikunja watcher: {new_todos.get('message')}")
+                        else:
+                            vikunja_watch_error_notified = False
+                            if new_todos:
+                                response = prompt(
+                                    "[system] The user just added these to-dos directly in Vikunja (not through you): "
+                                    f"{json.dumps(new_todos)}. Briefly acknowledge you noticed them, mentioning the titles. "
+                                    "If one has no due date, ask if they want to set one. Suggest a priority or extra details only when clearly useful. "
+                                    "If one looks like a duplicate of an existing to-do, point it out. Keep it short, don't use tools unless needed."
+                                )
+                                if response.startswith("⚠️ Failed communicating"):
+                                    print(f"⚠️ Vikunja watcher: LLM unavailable, will retry announcing new to-dos on the next check.")
+                                else:
+                                    send_message(f"👀 {response}")
+                                    mark_todos_seen([todo["id"] for todo in new_todos])
 
             except Exception as e:
                 try:

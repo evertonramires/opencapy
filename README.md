@@ -95,6 +95,7 @@ To-dos (Vikunja):
 - Create the API token in Vikunja under Settings > API Tokens, with permissions for tasks and projects.
 - Optional: `VIKUNJA_DEFAULT_PROJECT_ID` sets the project new to-dos go to (defaults to 1, usually the Inbox).
 - Besides the manual commands below, the agent can manage to-dos on its own through the vikunja tool (add, list, complete, delete, and pick a project).
+- The agent also watches Vikunja for to-dos you add outside the bot (web/mobile app) and briefly acknowledges them, suggesting a due date when one is missing. `VIKUNJA_WATCH_INTERVAL_SECONDS` controls how often it checks (defaults to 30). The first check after enabling silently marks existing to-dos as known, so only to-dos added afterwards are announced (tracked in `hood/vikunja_seen.json`).
 
 ```code
 /addtodo Buy groceries - add a to-do

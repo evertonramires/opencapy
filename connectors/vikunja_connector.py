@@ -43,6 +43,8 @@ def _simplify_todo(task: dict) -> dict:
     due_date = task.get("due_date") or ""
     if due_date == _no_due_date:
         due_date = ""
+    related = task.get("related_tasks") or {}
+    subtasks = related.get("subtask") or []
     return {
         "id": task.get("id"),
         "title": task.get("title"),
@@ -51,6 +53,9 @@ def _simplify_todo(task: dict) -> dict:
         "due_date": due_date,
         "priority": task.get("priority", 0),
         "project_id": task.get("project_id"),
+        "percent_done": task.get("percent_done", 0),
+        "is_subtask": bool(related.get("parenttask")),
+        "subtasks": [{"id": s.get("id"), "title": s.get("title"), "done": s.get("done", False)} for s in subtasks],
     }
 
 def add_todo(title: str, due_date: str = "", description: str = "", priority: int = 0, project_id: int = 0) -> dict:
@@ -82,6 +87,55 @@ def list_todos(include_done: bool = False) -> list[dict] | dict:
     if not include_done:
         todos = [todo for todo in todos if not todo["done"]]
     return todos
+
+def update_todo(todo_id: int, title: str = "", description: str = "", due_date: str = "", start_date: str = "", priority: int = -1) -> dict:
+    if not vikunja_enabled():
+        return _disabled_error()
+    payload = {}
+    if title:
+        payload["title"] = title
+    if description:
+        payload["description"] = description
+    if due_date:
+        payload["due_date"] = due_date
+    if start_date:
+        payload["start_date"] = start_date
+    if priority >= 0:
+        payload["priority"] = priority
+    if not payload:
+        return {"status": "error", "tool": "vikunja", "message": "Nothing to update, provide at least one field."}
+    response = _request("post", f"/tasks/{todo_id}", json=payload)
+    if isinstance(response, dict):
+        return response
+    if not response.ok:
+        return _request_error(response)
+    return {"status": "success", "todo": _simplify_todo(response.json())}
+
+def add_subtasks(parent_todo_id: int, titles: list[str]) -> dict:
+    if not vikunja_enabled():
+        return _disabled_error()
+    parent_response = _request("get", f"/tasks/{parent_todo_id}")
+    if isinstance(parent_response, dict):
+        return parent_response
+    if not parent_response.ok:
+        return _request_error(parent_response)
+    project_id = parent_response.json().get("project_id") or _default_project_id()
+    created = []
+    for title in titles:
+        response = _request("put", f"/projects/{project_id}/tasks", json={"title": title})
+        if isinstance(response, dict) or not response.ok:
+            error = response if isinstance(response, dict) else _request_error(response)
+            error["created_so_far"] = created
+            return error
+        subtask = response.json()
+        mark_todo_seen(subtask["id"])
+        relation = _request("put", f"/tasks/{parent_todo_id}/relations", json={"other_task_id": subtask["id"], "relation_kind": "subtask"})
+        if isinstance(relation, dict) or not relation.ok:
+            error = relation if isinstance(relation, dict) else _request_error(relation)
+            error["created_so_far"] = created
+            return error
+        created.append(_simplify_todo(subtask))
+    return {"status": "success", "parent_todo_id": parent_todo_id, "subtasks": created}
 
 def complete_todo(todo_id: int) -> dict:
     if not vikunja_enabled():
@@ -130,6 +184,17 @@ def mark_todos_seen(todo_ids: list[int]) -> None:
 def mark_todo_seen(todo_id: int) -> None:
     mark_todos_seen([todo_id])
 
+def _sync_subtask_progress(tasks: list[dict]) -> None:
+    """Keeps each parent task's percent_done bar in sync with how many of its
+    subtasks are done, so completing subtasks anywhere fills the progress bar."""
+    for task in tasks:
+        subtasks = (task.get("related_tasks") or {}).get("subtask") or []
+        if not subtasks or task.get("done"):
+            continue
+        progress = round(sum(1 for s in subtasks if s.get("done", False)) / len(subtasks), 2)
+        if abs(task.get("percent_done", 0) - progress) >= 0.01:
+            _request("post", f"/tasks/{task['id']}", json={"percent_done": progress})
+
 def check_new_todos() -> list[dict] | dict:
     """Returns to-dos created outside the bot since the last check, without marking
     them seen — the caller must mark_todos_seen after successfully notifying the
@@ -143,6 +208,7 @@ def check_new_todos() -> list[dict] | dict:
     if not response.ok:
         return _request_error(response)
     tasks = response.json() or []
+    _sync_subtask_progress(tasks)
     current_ids = {task["id"] for task in tasks}
     seen = _read_seen_ids()
     if seen is None:
@@ -171,6 +237,29 @@ def daily_focus_todos() -> list[dict] | dict | bool:
 def mark_focus_sent() -> None:
     state = _read_state()
     state["last_focus_date"] = datetime.now(timezone.utc).date().isoformat()
+    _write_state(state)
+
+def daily_dateless_todos() -> list[dict] | dict | bool:
+    """Once a day at VIKUNJA_DATE_NUDGE_HOUR (UTC, -1 disables), returns the pending
+    top-level to-dos missing a due date, so the agent can ask the user for dates.
+    Returns False when it's not time yet or already sent today — the caller must
+    mark_date_nudge_sent after successfully sending."""
+    nudge_hour = int(os.getenv("VIKUNJA_DATE_NUDGE_HOUR", "-1"))
+    if not vikunja_enabled() or nudge_hour < 0:
+        return False
+    now = datetime.now(timezone.utc)
+    if now.hour < nudge_hour:
+        return False
+    if _read_state().get("last_date_nudge_date") == now.date().isoformat():
+        return False
+    todos = list_todos()
+    if isinstance(todos, dict):
+        return todos
+    return [todo for todo in todos if not todo["due_date"] and not todo["is_subtask"]]
+
+def mark_date_nudge_sent() -> None:
+    state = _read_state()
+    state["last_date_nudge_date"] = datetime.now(timezone.utc).date().isoformat()
     _write_state(state)
 
 def list_todo_projects() -> list[dict] | dict:

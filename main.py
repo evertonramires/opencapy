@@ -13,7 +13,15 @@ from connectors.clock_connector import get_time
 from connectors.taskbook_connector import delete_task, read_tasks
 from connectors.routines_connector import read_routines
 from connectors.calendar_connector import calendar_today
-from connectors.vikunja_connector import check_new_todos, daily_focus_todos, mark_focus_sent, mark_todos_seen, vikunja_enabled
+from connectors.vikunja_connector import (
+    check_new_todos,
+    daily_dateless_todos,
+    daily_focus_todos,
+    mark_date_nudge_sent,
+    mark_focus_sent,
+    mark_todos_seen,
+    vikunja_enabled,
+)
 from agent import prompt
 from connectors.chat_connector import register_commands, send_message, read_messages
 from datetime import datetime
@@ -139,8 +147,10 @@ if __name__ == "__main__":
                                     "[system] The user just added these to-dos directly in Vikunja (not through you): "
                                     f"{json.dumps(new_todos)}. Acknowledge them in one or two friendly sentences, mentioning the titles. "
                                     "Capturing the thought was the win, so don't demand decisions. "
+                                    "If one is clearly a multi-step project, break it into 3 to 6 small subtasks with add_subtasks and mention you did, "
+                                    "so its progress bar and Gantt view work; if the breakdown isn't obvious, don't guess, just acknowledge. "
                                     "Ask at most one short optional question, and only if something is clearly time-sensitive and missing a due date. "
-                                    "No guilt, no lectures, don't use tools unless needed."
+                                    "No guilt, no lectures, no other tools."
                                 )
                                 if response.startswith("⚠️ Failed communicating"):
                                     print(f"⚠️ Vikunja watcher: LLM unavailable, will retry announcing new to-dos on the next check.")
@@ -163,6 +173,23 @@ if __name__ == "__main__":
                             else:
                                 send_message(f"🎯 {response}")
                                 mark_focus_sent()
+                    dateless_todos = daily_dateless_todos()
+                    if isinstance(dateless_todos, list):
+                        if not dateless_todos:
+                            mark_date_nudge_sent()
+                        else:
+                            response = prompt(
+                                "[system] Daily planning nudge. These to-dos have no due date: "
+                                f"{json.dumps(dateless_todos)}. In one short friendly message, list them (at most 5) and ask the user "
+                                "to reply with rough dates so their Gantt timeline and planning views stay useful. Make clear that rough "
+                                "answers like 'friday' or 'next week' are fine and that skipping any of them is ok. "
+                                "When they reply later, set the dates with the update_todo tool. No guilt, keep it inviting."
+                            )
+                            if response.startswith("⚠️ Failed communicating"):
+                                print("⚠️ Vikunja date nudge: LLM unavailable, will retry on the next heartbeat.")
+                            else:
+                                send_message(f"🗓️ {response}")
+                                mark_date_nudge_sent()
 
             except Exception as e:
                 try:

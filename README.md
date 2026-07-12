@@ -98,6 +98,8 @@ To-dos (Vikunja):
 - The agent also watches Vikunja for to-dos you add outside the bot (web/mobile app) and briefly acknowledges them. `VIKUNJA_WATCH_INTERVAL_SECONDS` controls how often it checks (defaults to 30). The first check after enabling silently marks existing to-dos as known, so only to-dos added afterwards are announced (tracked in `hood/vikunja_seen.json`).
 - The to-do features are designed to be ADHD-friendly: capturing is instant (no interrogation about details), and starting is helped by `/focus`, which picks exactly one to-do and suggests a first step small enough to take two minutes, offering a check-in afterwards.
 - Optional: `VIKUNJA_DAILY_FOCUS_HOUR` (24h UTC hour, -1 disables) sends one gentle morning message with up to 3 to-dos that matter today and a suggested starter — never the whole list.
+- Optional: `VIKUNJA_DATE_NUDGE_HOUR` (24h UTC hour, -1 disables) sends one daily message listing to-dos without a due date; reply with rough dates ("friday", "next week") and the agent sets them, keeping Vikunja's Gantt timeline useful.
+- The agent breaks multi-step to-dos into subtasks (on its own or when asked) and keeps each parent's progress bar in sync as subtasks get done — including ones you tick off directly in the Vikunja app.
 
 ```code
 /focus - pick one to-do to start now, with a tiny first step

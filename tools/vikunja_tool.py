@@ -4,6 +4,8 @@ from connectors.vikunja_connector import (
     list_todos as connector_list_todos,
     complete_todo as connector_complete_todo,
     delete_todo as connector_delete_todo,
+    update_todo as connector_update_todo,
+    add_subtasks as connector_add_subtasks,
     list_todo_projects as connector_list_todo_projects,
 )
 
@@ -22,6 +24,14 @@ def complete_todo(todo_id: int) -> dict:
 def delete_todo(todo_id: int) -> dict:
     notify_tool_use(f"🔧✅❌ Vikunja tool used to delete to-do {todo_id}.")
     return connector_delete_todo(todo_id)
+
+def update_todo(todo_id: int, title: str = "", description: str = "", due_date: str = "", start_date: str = "", priority: int = -1) -> dict:
+    notify_tool_use(f"🔧✅✏️ Vikunja tool used to update to-do {todo_id}.")
+    return connector_update_todo(todo_id, title, description, due_date, start_date, priority)
+
+def add_subtasks(parent_todo_id: int, titles: list[str]) -> dict:
+    notify_tool_use(f"🔧✅🪜 Vikunja tool used to add {len(titles)} subtasks to to-do {parent_todo_id}.")
+    return connector_add_subtasks(parent_todo_id, titles)
 
 def list_todo_projects() -> list[dict] | dict:
     notify_tool_use(f"🔧✅📁 Vikunja tool used to list to-do projects.")
@@ -111,6 +121,67 @@ delete_todo_tool = {
                 },
             },
             "required": ["todo_id"],
+        },
+    },
+}
+
+update_todo_tool = {
+    "type": "function",
+    "function": {
+        "name": "update_todo",
+        "description": "Update a to-do in Vikunja: set or change its due date, start date, title, description, or priority. Use this when the user gives a date for an existing to-do. Start and due dates make the Gantt timeline view work.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "todo_id": {
+                    "type": "integer",
+                    "description": "The id of the to-do to update. Use list_todos to find it.",
+                },
+                "title": {
+                    "type": "string",
+                    "description": "Optional new title. Leave empty to keep the current one.",
+                },
+                "description": {
+                    "type": "string",
+                    "description": "Optional new description. Leave empty to keep the current one.",
+                },
+                "due_date": {
+                    "type": "string",
+                    "description": "Optional due date as an ISO8601 UTC timestamp (e.g. '2026-07-17T18:00:00Z'). Leave empty to keep the current one.",
+                },
+                "start_date": {
+                    "type": "string",
+                    "description": "Optional start date as an ISO8601 UTC timestamp, shown in the Gantt view. Leave empty to keep the current one.",
+                },
+                "priority": {
+                    "type": "integer",
+                    "description": "Optional priority from 0 (unset) to 5 (urgent). Use -1 to keep the current one.",
+                },
+            },
+            "required": ["todo_id"],
+        },
+    },
+}
+
+add_subtasks_tool = {
+    "type": "function",
+    "function": {
+        "name": "add_subtasks",
+        "description": "Break a Vikunja to-do into subtasks (small concrete steps). The parent's progress bar fills automatically as subtasks get done, which the user finds motivating, so use this whenever a to-do is really a multi-step project. Keep steps small and actionable, 3 to 6 of them.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "parent_todo_id": {
+                    "type": "integer",
+                    "description": "The id of the to-do to break down. Use list_todos to find it.",
+                },
+                "titles": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "The subtask titles, in the order they should be done, each a small concrete step (e.g. 'Find the workshop phone number').",
+                },
+            },
+            "required": ["parent_todo_id", "titles"],
         },
     },
 }

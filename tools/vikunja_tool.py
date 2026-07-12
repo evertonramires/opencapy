@@ -167,7 +167,7 @@ add_subtasks_tool = {
     "type": "function",
     "function": {
         "name": "add_subtasks",
-        "description": "Break a Vikunja to-do into subtasks (small concrete steps). The parent's progress bar fills automatically as subtasks get done, which the user finds motivating, so use this whenever a to-do is really a multi-step project. Keep steps small and actionable, 3 to 6 of them.",
+        "description": "Break a Vikunja to-do into subtasks (small concrete steps). The subtasks are placed in a dedicated project named after the to-do, keeping the main list tidy, and the parent's progress bar fills automatically as subtasks get done, which the user finds motivating. Use this whenever a to-do is really a multi-step project. Keep steps small and actionable, 3 to 6 of them.",
         "parameters": {
             "type": "object",
             "properties": {

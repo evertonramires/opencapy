@@ -112,9 +112,9 @@ def update_todo(todo_id: int, title: str = "", description: str = "", due_date: 
     return {"status": "success", "todo": _simplify_todo(response.json())}
 
 def add_subtasks(parent_todo_id: int, titles: list[str]) -> dict:
-    """Creates the subtasks inside a dedicated project named after the parent
-    to-do (nested under the parent's project), so the main task list stays
-    uncluttered while the subtask relation keeps the progress bar in sync."""
+    """Creates the subtasks in the parent's project, prefixing each title with
+    the parent's name and step number (e.g. '[ change car tyres - 1 ] lift car')
+    so every step stays visibly connected to the original to-do in the list."""
     if not vikunja_enabled():
         return _disabled_error()
     parent_response = _request("get", f"/tasks/{parent_todo_id}")
@@ -123,19 +123,12 @@ def add_subtasks(parent_todo_id: int, titles: list[str]) -> dict:
     if not parent_response.ok:
         return _request_error(parent_response)
     parent = parent_response.json()
-    parent_project_id = parent.get("project_id") or _default_project_id()
-    existing_subtasks = (parent.get("related_tasks") or {}).get("subtask") or []
-    project_id = next((s.get("project_id") for s in existing_subtasks if s.get("project_id") != parent_project_id), 0)
-    if not project_id:
-        project_response = _request("put", "/projects", json={"title": parent.get("title") or f"To-do {parent_todo_id}", "parent_project_id": parent_project_id})
-        if isinstance(project_response, dict):
-            return project_response
-        if not project_response.ok:
-            return _request_error(project_response)
-        project_id = project_response.json()["id"]
+    project_id = parent.get("project_id") or _default_project_id()
+    parent_title = parent.get("title") or f"To-do {parent_todo_id}"
+    step = len((parent.get("related_tasks") or {}).get("subtask") or []) + 1
     created = []
     for title in titles:
-        response = _request("put", f"/projects/{project_id}/tasks", json={"title": title})
+        response = _request("put", f"/projects/{project_id}/tasks", json={"title": f"[ {parent_title} - {step} ] {title}"})
         if isinstance(response, dict) or not response.ok:
             error = response if isinstance(response, dict) else _request_error(response)
             error["created_so_far"] = created
@@ -148,7 +141,8 @@ def add_subtasks(parent_todo_id: int, titles: list[str]) -> dict:
             error["created_so_far"] = created
             return error
         created.append(_simplify_todo(subtask))
-    return {"status": "success", "parent_todo_id": parent_todo_id, "project_id": project_id, "subtasks": created}
+        step += 1
+    return {"status": "success", "parent_todo_id": parent_todo_id, "subtasks": created}
 
 def complete_todo(todo_id: int) -> dict:
     if not vikunja_enabled():

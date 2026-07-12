@@ -2,6 +2,7 @@ import os
 import json
 import time
 import calendar
+import random
 import sys
 import subprocess
 import traceback
@@ -83,7 +84,15 @@ if __name__ == "__main__":
         time.sleep(2)  # Wait for API server to start
         print("\n\n⚙️ Waking up your Capy, this may take a minute..")
         send_message("⚙️ Waking up your Capy, this may take a minute...")
-        wake_message = prompt(f"[system] Wake up! tell the user that you just woke up in a fun, playful way!")
+        wake_style = random.choice([
+            "fun and playful",
+            "sleepy and grumpy but lovable",
+            "dramatic and theatrical",
+            "chill and minimal, barely a word",
+            "overly formal butler style, tongue in cheek",
+            "like you overslept and are pretending you didn't",
+        ])
+        wake_message = prompt(f"[system] Wake up! Greet the user in a {wake_style} way, in one or two short sentences. Do not reuse greetings or phrasing from your memory.")
         send_message(f"{wake_message}\n\n🟢 Ready to work!")
         print(f"\n\nNavigate to {chat_api_host}/ to start chatting.\n\n🟢 Ready to work!\n\n")
 

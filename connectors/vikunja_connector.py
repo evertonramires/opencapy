@@ -155,6 +155,7 @@ def complete_todo(todo_id: int) -> dict:
         return response
     if not response.ok:
         return _request_error(response)
+    mark_todos_done([todo_id])
     return {"status": "success", "todo": _simplify_todo(response.json())}
 
 def delete_todo(todo_id: int) -> dict:
@@ -205,13 +206,14 @@ def _sync_subtask_progress(tasks: list[dict]) -> None:
         if abs(task.get("percent_done", 0) - progress) >= 0.01:
             _request("post", f"/tasks/{task['id']}", json={"percent_done": progress})
 
-def check_new_todos() -> list[dict] | dict:
-    """Returns to-dos created outside the bot since the last check, without marking
-    them seen — the caller must mark_todos_seen after successfully notifying the
-    user, so a failed notification is retried on the next check.
-    First run seeds the seen file without reporting anything."""
+def check_todo_updates() -> dict:
+    """Returns {"status": "success", "new": [...], "completed": [...]} with to-dos
+    created outside the bot and to-dos completed since the last check, without
+    marking them handled — the caller must mark_todos_seen / mark_todos_done after
+    successfully notifying the user, so a failed notification is retried on the
+    next check. First run seeds the state without reporting anything."""
     if not vikunja_enabled():
-        return []
+        return {"status": "success", "new": [], "completed": []}
     response = _request("get", "/tasks", params={"per_page": 50, "sort_by": "id", "order_by": "desc"})
     if isinstance(response, dict):
         return response
@@ -220,14 +222,36 @@ def check_new_todos() -> list[dict] | dict:
     tasks = response.json() or []
     _sync_subtask_progress(tasks)
     current_ids = {task["id"] for task in tasks}
-    seen = _read_seen_ids()
+    current_done_ids = {task["id"] for task in tasks if task.get("done", False)}
+    state = _read_state()
+    seen = state.get("seen_ids")
+    done = state.get("done_ids")
+    new_tasks = []
+    completed_tasks = []
     if seen is None:
-        _write_seen_ids(list(current_ids))
-        return []
-    new_tasks = [task for task in tasks if task["id"] not in seen and not task.get("done", False)]
-    new_ids = {task["id"] for task in new_tasks}
-    _write_seen_ids(list((set(seen) | current_ids) - new_ids))
-    return [_simplify_todo(task) for task in new_tasks]
+        state["seen_ids"] = sorted(current_ids)
+    else:
+        new_tasks = [task for task in tasks if task["id"] not in seen and not task.get("done", False)]
+        new_ids = {task["id"] for task in new_tasks}
+        state["seen_ids"] = sorted((set(seen) | current_ids) - new_ids)
+    if done is None:
+        state["done_ids"] = sorted(current_done_ids)
+    else:
+        completed_tasks = [task for task in tasks if task["id"] in current_done_ids and task["id"] not in done]
+        state["done_ids"] = sorted(set(done) & current_done_ids)
+    _write_state(state)
+    return {
+        "status": "success",
+        "new": [_simplify_todo(task) for task in new_tasks],
+        "completed": [_simplify_todo(task) for task in completed_tasks],
+    }
+
+def mark_todos_done(todo_ids: list[int]) -> None:
+    state = _read_state()
+    done = set(state.get("done_ids") or [])
+    if not set(todo_ids) <= done:
+        state["done_ids"] = sorted(done | set(todo_ids))
+        _write_state(state)
 
 def daily_focus_todos() -> list[dict] | dict | bool:
     """Once a day at VIKUNJA_DAILY_FOCUS_HOUR (UTC, -1 disables), returns the

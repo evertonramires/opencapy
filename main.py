@@ -14,11 +14,12 @@ from connectors.taskbook_connector import delete_task, read_tasks
 from connectors.routines_connector import read_routines
 from connectors.calendar_connector import calendar_today
 from connectors.vikunja_connector import (
-    check_new_todos,
+    check_todo_updates,
     daily_dateless_todos,
     daily_focus_todos,
     mark_date_nudge_sent,
     mark_focus_sent,
+    mark_todos_done,
     mark_todos_seen,
     subtasks_enabled,
     vikunja_enabled,
@@ -129,20 +130,24 @@ if __name__ == "__main__":
                             response = prompt(f"[system] This routine just triggered, if it requires a tool, execute, if not, treat as a notification to the user: {routine['task']}")
                             send_message(f"♾️ {response}")
                     calendar_events = calendar_today()
-                    if calendar_events is not False:
+                    if isinstance(calendar_events, list) and calendar_events:
                         response = prompt(f"[system] These are today's calendar events: {calendar_events}. If it requires a tool, execute, if not, treat as a notification to the user.")
                         send_message(f"📅 {response}")
+                    elif isinstance(calendar_events, dict):
+                        print(f"⚠️ Calendar daily check failed: {calendar_events.get('message')}")
                     if vikunja_enabled() and now - last_vikunja_check >= vikunja_watch_interval_seconds:
                         last_vikunja_check = now
-                        new_todos = check_new_todos()
-                        if isinstance(new_todos, dict):
+                        todo_updates = check_todo_updates()
+                        if todo_updates.get("status") != "success":
                             if not vikunja_watch_error_notified:
                                 vikunja_watch_error_notified = True
                                 if announce_errors == "true":
-                                    send_message(f"⚠️ Vikunja watcher: {new_todos.get('message')}")
-                                print(f"⚠️ Vikunja watcher: {new_todos.get('message')}")
+                                    send_message(f"⚠️ Vikunja watcher: {todo_updates.get('message')}")
+                                print(f"⚠️ Vikunja watcher: {todo_updates.get('message')}")
                         else:
                             vikunja_watch_error_notified = False
+                            new_todos = todo_updates["new"]
+                            completed_todos = todo_updates["completed"]
                             if new_todos:
                                 breakdown_hint = (
                                     "If one is clearly a multi-step project, break it into 3 to 6 small subtasks with add_subtasks and mention you did, "
@@ -161,6 +166,18 @@ if __name__ == "__main__":
                                 else:
                                     send_message(f"👀 {response}")
                                     mark_todos_seen([todo["id"] for todo in new_todos])
+                            if completed_todos:
+                                response = prompt(
+                                    "[system] The user just completed these to-dos in Vikunja: "
+                                    f"{json.dumps(completed_todos)}. Cheer them on! One or two sentences, genuine and warm, "
+                                    "mentioning what they finished. Finishing things is a real win worth "
+                                    "celebrating. No 'what's next', no new demands, don't use tools."
+                                )
+                                if response.startswith("⚠️ Failed communicating"):
+                                    print(f"⚠️ Vikunja watcher: LLM unavailable, will retry cheering completed to-dos on the next check.")
+                                else:
+                                    send_message(f"🎉 {response}")
+                                    mark_todos_done([todo["id"] for todo in completed_todos])
                     focus_todos = daily_focus_todos()
                     if isinstance(focus_todos, list):
                         if not focus_todos:

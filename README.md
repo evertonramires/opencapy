@@ -95,8 +95,14 @@ To-dos (Vikunja):
 - Create the API token in Vikunja under Settings > API Tokens, with permissions for tasks and projects.
 - Optional: `VIKUNJA_DEFAULT_PROJECT_ID` sets the project new to-dos go to (defaults to 1, usually the Inbox).
 - Besides the manual commands below, the agent can manage to-dos on its own through the vikunja tool (add, list, complete, delete, and pick a project).
+- The agent also watches Vikunja for to-dos you add outside the bot (web/mobile app) and briefly acknowledges them, and cheers you on when you complete a to-do — wherever you tick it off. `VIKUNJA_WATCH_INTERVAL_SECONDS` controls how often it checks (defaults to 30). The first check after enabling silently marks existing to-dos as known, so only to-dos added afterwards are announced (tracked in `hood/vikunja_seen.json`).
+- The to-do features are designed to be ADHD-friendly: capturing is instant (no interrogation about details), and starting is helped by `/focus`, which picks exactly one to-do and suggests a first step small enough to take two minutes, offering a check-in afterwards.
+- Optional: `VIKUNJA_DAILY_FOCUS_HOUR` (24h UTC hour, -1 disables) sends one gentle morning message with up to 3 to-dos that matter today and a suggested starter — never the whole list.
+- Optional: `VIKUNJA_DATE_NUDGE_HOUR` (24h UTC hour, -1 disables) sends one daily message listing to-dos without a due date; reply with rough dates ("friday", "next week") and the agent sets them, keeping Vikunja's Gantt timeline useful.
+- Optional: with `ENABLE_VIKUNJA_SUBTASKS=true` the agent breaks multi-step to-dos into subtasks (on its own or when asked), naming each one after the original to-do and step number (e.g. `[ change car tyres - 1 ] lift car`) so steps stay recognizable in the list. The parent's progress bar is kept in sync as subtasks get done — including ones you tick off directly in the Vikunja app.
 
 ```code
+/focus - pick one to-do to start now, with a tiny first step
 /addtodo Buy groceries - add a to-do
 /listtodos - list pending to-dos
 /listtodos all - list all to-dos including done ones
@@ -120,6 +126,7 @@ Google Calendar:
 - If callback host is not localhost, make sure that callback host address is reachable by the device opening the OAuth popup.
 - After Google redirects back to callback, refresh token is validated and saved automatically in `hood/calendar_oauth.json`.
 - Optional defaults: `CALENDAR_DEFAULT_DAYS_AHEAD`, `CALENDAR_DEFAULT_MAX_RESULTS`.
+- Once a day (from `CALENDAR_DAILY_CHECK_HOUR`) the agent messages you today's events — only when there are any; empty days stay silent.
 - Manual calendar commands:
 
 ```code

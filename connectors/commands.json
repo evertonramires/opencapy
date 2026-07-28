@@ -25,6 +25,10 @@
             "description": "Delete a routine by ID. Example: /deleteroutine 1"
         },
         {
+            "command": "focus",
+            "description": "Pick one to-do to start now, with a tiny first step"
+        },
+        {
             "command": "addtodo",
             "description": "Add a to-do to Vikunja. Example: /addtodo Buy groceries"
         },

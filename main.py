@@ -2,6 +2,7 @@ import os
 import json
 import time
 import calendar
+import random
 import sys
 import subprocess
 import traceback
@@ -12,6 +13,17 @@ from connectors.clock_connector import get_time
 from connectors.taskbook_connector import delete_task, read_tasks
 from connectors.routines_connector import read_routines
 from connectors.calendar_connector import calendar_today
+from connectors.vikunja_connector import (
+    check_todo_updates,
+    daily_dateless_todos,
+    daily_focus_todos,
+    mark_date_nudge_sent,
+    mark_focus_sent,
+    mark_todos_done,
+    mark_todos_seen,
+    subtasks_enabled,
+    vikunja_enabled,
+)
 from agent import prompt
 from connectors.chat_connector import register_commands, send_message, read_messages
 from datetime import datetime
@@ -19,6 +31,9 @@ from datetime import datetime
 
 heartbeat_interval_seconds = int(os.getenv("HEARTBEAT_INTERVAL_SECONDS", 10))
 announce_errors = os.getenv("ANNOUNCE_ERRORS", "false").lower()
+vikunja_watch_interval_seconds = int(os.getenv("VIKUNJA_WATCH_INTERVAL_SECONDS", 30))
+last_vikunja_check = 0
+vikunja_watch_error_notified = False
 
 chat_api_host = os.getenv("CHAT_API_HOST", "http://localhost:8000")
 chat_api_bind = chat_api_host.replace("http://", "").replace("https://", "")
@@ -83,7 +98,15 @@ if __name__ == "__main__":
         time.sleep(2)  # Wait for API server to start
         print("\n\n⚙️ Waking up your Capy, this may take a minute..")
         send_message("⚙️ Waking up your Capy, this may take a minute...")
-        wake_message = prompt(f"[system] Wake up! tell the user that you just woke up in a fun, playful way!")
+        wake_style = random.choice([
+            "fun and playful",
+            "sleepy and grumpy but lovable",
+            "dramatic and theatrical",
+            "chill and minimal, barely a word",
+            "overly formal butler style, tongue in cheek",
+            "like you overslept and are pretending you didn't",
+        ])
+        wake_message = prompt(f"[system] Wake up! Greet the user in a {wake_style} way, in one or two short sentences. Do not reuse greetings or phrasing from your memory.")
         send_message(f"{wake_message}\n\n🟢 Ready to work!")
         print(f"\n\nNavigate to {chat_api_host}/ to start chatting.\n\n🟢 Ready to work!\n\n")
 
@@ -107,9 +130,87 @@ if __name__ == "__main__":
                             response = prompt(f"[system] This routine just triggered, if it requires a tool, execute, if not, treat as a notification to the user: {routine['task']}")
                             send_message(f"♾️ {response}")
                     calendar_events = calendar_today()
-                    if calendar_events is not False:
+                    if isinstance(calendar_events, list) and calendar_events:
                         response = prompt(f"[system] These are today's calendar events: {calendar_events}. If it requires a tool, execute, if not, treat as a notification to the user.")
                         send_message(f"📅 {response}")
+                    elif isinstance(calendar_events, dict):
+                        print(f"⚠️ Calendar daily check failed: {calendar_events.get('message')}")
+                    if vikunja_enabled() and now - last_vikunja_check >= vikunja_watch_interval_seconds:
+                        last_vikunja_check = now
+                        todo_updates = check_todo_updates()
+                        if todo_updates.get("status") != "success":
+                            if not vikunja_watch_error_notified:
+                                vikunja_watch_error_notified = True
+                                if announce_errors == "true":
+                                    send_message(f"⚠️ Vikunja watcher: {todo_updates.get('message')}")
+                                print(f"⚠️ Vikunja watcher: {todo_updates.get('message')}")
+                        else:
+                            vikunja_watch_error_notified = False
+                            new_todos = todo_updates["new"]
+                            completed_todos = todo_updates["completed"]
+                            if new_todos:
+                                breakdown_hint = (
+                                    "If one is clearly a multi-step project, break it into 3 to 6 small subtasks with add_subtasks and mention you did, "
+                                    "so its progress bar and Gantt view work; if the breakdown isn't obvious, don't guess, just acknowledge. "
+                                ) if subtasks_enabled() else ""
+                                response = prompt(
+                                    "[system] The user just added these to-dos directly in Vikunja (not through you): "
+                                    f"{json.dumps(new_todos)}. Acknowledge them in one or two friendly sentences, mentioning the titles. "
+                                    "Capturing the thought was the win, so don't demand decisions. "
+                                    f"{breakdown_hint}"
+                                    "Ask at most one short optional question, and only if something is clearly time-sensitive and missing a due date. "
+                                    "No guilt, no lectures, no other tools."
+                                )
+                                if response.startswith("⚠️ Failed communicating"):
+                                    print(f"⚠️ Vikunja watcher: LLM unavailable, will retry announcing new to-dos on the next check.")
+                                else:
+                                    send_message(f"👀 {response}")
+                                    mark_todos_seen([todo["id"] for todo in new_todos])
+                            if completed_todos:
+                                response = prompt(
+                                    "[system] The user just completed these to-dos in Vikunja: "
+                                    f"{json.dumps(completed_todos)}. Cheer them on! One or two sentences, genuine and warm, "
+                                    "mentioning what they finished. Finishing things is a real win worth "
+                                    "celebrating. No 'what's next', no new demands, don't use tools."
+                                )
+                                if response.startswith("⚠️ Failed communicating"):
+                                    print(f"⚠️ Vikunja watcher: LLM unavailable, will retry cheering completed to-dos on the next check.")
+                                else:
+                                    send_message(f"🎉 {response}")
+                                    mark_todos_done([todo["id"] for todo in completed_todos])
+                    focus_todos = daily_focus_todos()
+                    if isinstance(focus_todos, list):
+                        if not focus_todos:
+                            mark_focus_sent()
+                        else:
+                            response = prompt(
+                                "[system] Morning focus time. These are the user's pending to-dos: "
+                                f"{json.dumps(focus_todos)}. Keep this light: pick at most 3 that matter most today "
+                                "(due or overdue first), then suggest exactly one to start with, with a first step so small it takes two minutes. "
+                                "Be brief, warm and encouraging. Never mention how many tasks are pending in total, never guilt about overdue ones."
+                            )
+                            if response.startswith("⚠️ Failed communicating"):
+                                print("⚠️ Vikunja focus: LLM unavailable, will retry on the next heartbeat.")
+                            else:
+                                send_message(f"🎯 {response}")
+                                mark_focus_sent()
+                    dateless_todos = daily_dateless_todos()
+                    if isinstance(dateless_todos, list):
+                        if not dateless_todos:
+                            mark_date_nudge_sent()
+                        else:
+                            response = prompt(
+                                "[system] Daily planning nudge. These to-dos have no due date: "
+                                f"{json.dumps(dateless_todos)}. In one short friendly message, list them (at most 5) and ask the user "
+                                "to reply with rough dates so their Gantt timeline and planning views stay useful. Make clear that rough "
+                                "answers like 'friday' or 'next week' are fine and that skipping any of them is ok. "
+                                "When they reply later, set the dates with the update_todo tool. No guilt, keep it inviting."
+                            )
+                            if response.startswith("⚠️ Failed communicating"):
+                                print("⚠️ Vikunja date nudge: LLM unavailable, will retry on the next heartbeat.")
+                            else:
+                                send_message(f"🗓️ {response}")
+                                mark_date_nudge_sent()
 
             except Exception as e:
                 try:

@@ -38,8 +38,9 @@ automatically.
 A Claude subscription has a rolling 5 hour usage window, and Open Capy watches it so it
 doesn't spend the whole thing talking to itself in the background.
 
-Once the window is at least `USAGE_BUFFER_THRESHOLD_PERCENT` used (80 by default, 100
-disables this entirely):
+Once the window is at least `USAGE_BUFFER_THRESHOLD_PERCENT` used (80 by default; set it to
+100 to effectively turn this off, since then it only kicks in once the window is fully spent
+and Claude would refuse the call anyway):
 
 - Background work — triggered tasks, routines, the calendar digest, the Vikunja watcher,
   the daily focus and the date nudge — goes into a buffer in `hood/buffer.json` instead of
@@ -210,6 +211,17 @@ Identity:
 ```code
 /readidentity - read the current identity information
 /writeidentity <content> - update the entire identity information
+```
+
+Claude subscription (see [Usage window and the work buffer](#usage-window-and-the-work-buffer)):
+
+```code
+/usage - how much of the 5 hour and 7 day windows is used, and when they reset
+/model opus - switch model; /model alone reports it, /model default restores the .env one
+/effort high - set reasoning effort (low, medium, high, xhigh, max, default)
+/later tidy up my notes - queue something for the next usage window
+/listbuffer - list the work waiting for the next window
+/deletebuffer 3 - drop buffered item 3
 ```
 
 Misc:

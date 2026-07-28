@@ -23,6 +23,7 @@ from connectors.human_connector import read_human_tasks, get_human_task, delete_
 from connectors.whitelist_connector import add_to_whitelist, remove_from_whitelist, read_whitelist
 from connectors.internet_connector import check_internet_connection
 from connectors.update_connector import run_self_update, restart_process
+from connectors.claude_code_connector import claude_code_enabled
 from agent import prompt
 
 
@@ -367,7 +368,7 @@ def read_messages():
                 except Exception as e:
                     send_message(f"Sorry, I couldn't restart right now, can we try again? Details: {e}")
             elif _is_command(message, "/model"):
-                send_message(os.getenv("LLM_MODEL", "unknown"))
+                send_message(os.getenv("CLAUDE_CODE_MODEL", "sonnet") if claude_code_enabled() else os.getenv("LLM_MODEL", "unknown"))
             elif _is_command(message, "/help"):
                 try:
                     # Prints README.md content

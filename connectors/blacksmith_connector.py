@@ -10,6 +10,7 @@ import tempfile
 from pathlib import Path
 
 from dotenv import load_dotenv
+from connectors.claude_code_connector import claude_code_enabled
 from connectors.llm_connector import prompt_model
 load_dotenv()
 
@@ -52,14 +53,14 @@ def forge_tool(tool_name: str, tool_request: str) -> dict:
     host = os.getenv("BLACKSMITH_LLM_API_HOST")
     key = os.getenv("BLACKSMITH_LLM_API_KEY")
     model = os.getenv("BLACKSMITH_LLM_MODEL")
-    if not host or not key or not model:
+    if not claude_code_enabled() and (not host or not key or not model):
         return {
             "status": "error",
             "message": "Blacksmith LLM is not properly configured.",
         }
 
     prompt = _build_generation_prompt(tool_name, tool_request)
-    llm_response = prompt_model(prompt, tools=None, host=host, key=key, model=model)
+    llm_response = prompt_model(prompt, tools=None, host=host, key=key, model=model, claude_model=os.getenv("CLAUDE_CODE_BLACKSMITH_MODEL", "opus"))
     payload = _parse_json_response(llm_response)
     if payload.get("status") == "error":
         return payload

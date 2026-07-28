@@ -2,12 +2,18 @@ import json
 import os
 import requests
 from dotenv import load_dotenv
+from connectors.claude_code_connector import claude_code_enabled, prompt_claude_code
 load_dotenv()
 
 def smarter_enabled() -> bool:
     return os.getenv("ENABLE_SMARTER", "false").lower() in ["true", "1", "yes"]
 
 def ask_smarter(question: str, tools=None, tool_handlers={}) -> str:
+    if claude_code_enabled():
+        try:
+            return prompt_claude_code(question, model=os.getenv("CLAUDE_CODE_SMARTER_MODEL", "opus"), use_tools=bool(tools))
+        except Exception as e:
+            print(f"⚠️ Claude Code CLI failed, trying the configured smarter LLM: {str(e)}")
     if not smarter_enabled():
         return "Sorry, I can't help. Smarter LLM is disabled. To enable it, set ENABLE_SMARTER=true in your .env file."
     host = os.getenv("SMARTER_LLM_API_HOST")

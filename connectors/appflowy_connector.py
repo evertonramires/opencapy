@@ -96,6 +96,17 @@ def _workspace_id() -> str | dict:
 def _default_database_id() -> str:
     return os.getenv("APPFLOWY_DEFAULT_DATABASE_ID", "").strip()
 
+def _no_database_error() -> dict:
+    """Names the databases that exist, so the caller can retry straight away
+    instead of having to go and list them first."""
+    databases = list_appflowy_databases()
+    return {
+        "status": "error",
+        "tool": "appflowy",
+        "message": "No database given and no default is configured. Pass one of these ids as database_id.",
+        "databases": databases if isinstance(databases, list) else [],
+    }
+
 def _field_map(workspace_id: str, database_id: str) -> dict | list:
     """Maps field ids to human names and back, so the tools can speak field
     names like 'Title' while the API only understands field uuids."""
@@ -144,7 +155,7 @@ def list_appflowy_rows(database_id: str = "", limit: int = 25) -> list[dict] | d
         return workspace_id
     database_id = database_id or _default_database_id()
     if not database_id:
-        return {"status": "error", "tool": "appflowy", "message": "No database given and APPFLOWY_DEFAULT_DATABASE_ID is not set. Use list_appflowy_databases to find one."}
+        return _no_database_error()
     ids_response = _request("get", f"/api/workspace/{workspace_id}/database/{database_id}/row")
     if isinstance(ids_response, dict):
         return ids_response
@@ -168,7 +179,7 @@ def add_appflowy_row(fields: dict, database_id: str = "") -> dict:
         return workspace_id
     database_id = database_id or _default_database_id()
     if not database_id:
-        return {"status": "error", "tool": "appflowy", "message": "No database given and APPFLOWY_DEFAULT_DATABASE_ID is not set. Use list_appflowy_databases to find one."}
+        return _no_database_error()
     field_list = _field_map(workspace_id, database_id)
     if isinstance(field_list, dict):
         return field_list
@@ -193,7 +204,7 @@ def update_appflowy_row(row_key: str, fields: dict, database_id: str = "") -> di
         return workspace_id
     database_id = database_id or _default_database_id()
     if not database_id:
-        return {"status": "error", "tool": "appflowy", "message": "No database given and APPFLOWY_DEFAULT_DATABASE_ID is not set. Use list_appflowy_databases to find one."}
+        return _no_database_error()
     field_list = _field_map(workspace_id, database_id)
     if isinstance(field_list, dict):
         return field_list

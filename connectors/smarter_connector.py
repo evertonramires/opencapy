@@ -3,13 +3,15 @@ import os
 import requests
 from dotenv import load_dotenv
 from connectors.claude_code_connector import claude_code_enabled, prompt_claude_code
+from connectors.usage_connector import buffering_active
 load_dotenv()
 
 def smarter_enabled() -> bool:
     return os.getenv("ENABLE_SMARTER", "false").lower() in ["true", "1", "yes"]
 
 def ask_smarter(question: str, tools=None, tool_handlers={}) -> str:
-    if claude_code_enabled():
+    # Above the usage threshold the Claude window is saved for buffered work, so this uses the configured smarter LLM
+    if claude_code_enabled() and not buffering_active():
         try:
             return prompt_claude_code(question, model=os.getenv("CLAUDE_CODE_SMARTER_MODEL", "opus"), use_tools=bool(tools))
         except Exception as e:

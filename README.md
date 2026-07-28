@@ -33,6 +33,43 @@ Keep `LLM_API_HOST`, `LLM_API_KEY` and `LLM_MODEL` configured: whenever the CLI 
 (not logged in, usage limit reached, binary missing) Open Capy falls back to them
 automatically.
 
+### Usage window and the work buffer
+
+A Claude subscription has a rolling 5 hour usage window, and Open Capy watches it so it
+doesn't spend the whole thing talking to itself in the background.
+
+Once the window is at least `USAGE_BUFFER_THRESHOLD_PERCENT` used (80 by default, 100
+disables this entirely):
+
+- Background work — triggered tasks, routines, the calendar digest, the Vikunja watcher,
+  the daily focus and the date nudge — goes into a buffer in `hood/buffer.json` instead of
+  being sent to Claude.
+- You get one message saying how used the window is and when it resets. One per window, not
+  one per heartbeat.
+- Chatting still works: your messages route to the `LLM_*` settings (and then
+  `FALLBACK_LLM_*`) instead of Claude, with all tools still available. So keep those
+  configured, or chat above the threshold will fail.
+- When the window resets the buffer drains on its own, one item per heartbeat, so the fresh
+  window isn't burned in one go.
+
+You can also park things there yourself with `/later`, for anything that is neither urgent
+nor important right now — those always wait for the next window, whatever the current usage.
+
+```code
+/usage - how much of the 5 hour and 7 day windows is used, and when they reset
+/model - get the current model; /model opus switches it
+/effort - get the current reasoning effort; /effort high sets it (low, medium, high, xhigh, max, default)
+/later tidy up my notes - queue something for the next usage window
+/listbuffer - list the work waiting for the next window
+/deletebuffer 3 - drop buffered item 3
+```
+
+The agent has the same abilities through its tools (`check_claude_usage`, `set_claude_model`,
+`set_claude_effort`, `buffer_for_next_window`, `list_buffered_work`), so it can check the
+window before starting something long, drop to a cheaper model when things get tight, or
+decide on its own that a piece of work can wait. Model and effort changes apply from the next
+message, since every reply runs in a fresh CLI session.
+
 ## Install
 
 ```bash

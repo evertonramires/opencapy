@@ -10,8 +10,28 @@ This harness was devoloped on Ubuntu 24.04, using UV Python, LM Studio and googl
 
 - Linux
 - Python
-- LM Studio or OpenAI standard compatible API
+- LM Studio or OpenAI standard compatible API, or the Claude Code CLI
 - Tool calling capable model loaded
+
+## Running on a Claude subscription
+
+Instead of paying per token for an API key, Open Capy can run on the Claude Code CLI
+under your Claude subscription.
+
+```bash
+npm install -g @anthropic-ai/claude-code
+claude # run once and sign in with your subscription
+```
+
+Then set `ENABLE_CLAUDE_CODE=true` in `.env` and start as usual. Open Capy's tools are
+handed to the CLI through `mcp_bridge.py`, an MCP server that re-exports every
+`tools/*_tool.py`, so tool calling keeps working exactly as before. Claude Code's own
+`Bash`, `Read`, `Write` and `WebSearch` tools are offered on top of them; trim that list
+with `CLAUDE_CODE_BUILTIN_TOOLS` if you don't want the agent to have shell access.
+
+Keep `LLM_API_HOST`, `LLM_API_KEY` and `LLM_MODEL` configured: whenever the CLI fails
+(not logged in, usage limit reached, binary missing) Open Capy falls back to them
+automatically.
 
 ## Install
 

@@ -115,6 +115,7 @@ echo " - $(pwd)/IDENTITY.md"
 echo ""
 if [ "$ENABLE_LMSTUDIO" = "false" ]; then
     echo "Make sure to set the correct LLM_API_HOST, LLM_API_KEY, and LLM_MODEL in the .env file then start the service with ./start.sh"
+    echo "To run on a Claude subscription instead, sign in with the claude CLI and set ENABLE_CLAUDE_CODE=true in the .env file"
     exit 0
 fi
 echo "1) Edit these files now and start manually later"

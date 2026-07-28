@@ -3,6 +3,7 @@ import json
 import os
 import requests
 from dotenv import load_dotenv
+from connectors.claude_code_connector import claude_code_enabled, prompt_claude_code
 load_dotenv()
 
 
@@ -43,7 +44,12 @@ def _load_tools_from_disk() -> tuple[list[dict], dict]:
     return tools, handlers
 
 
-def prompt_model(text: str, tools=None, tool_handlers=None, host=None, key=None, model=None, _allow_fallback=True) -> str:
+def prompt_model(text: str, tools=None, tool_handlers=None, host=None, key=None, model=None, claude_model=None, _allow_fallback=True) -> str:
+    if _allow_fallback and claude_code_enabled():
+        try:
+            return prompt_claude_code(text, model=claude_model, use_tools=bool(tools), original_prompt=_extract_original_user_prompt(text))
+        except Exception as e:
+            print(f"⚠️ Claude Code CLI failed, trying the configured LLM: {str(e)}")
     try:
         host = host or os.getenv("LLM_API_HOST", "")
         key = key or os.getenv("LLM_API_KEY")

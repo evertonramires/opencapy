@@ -2,3 +2,4 @@ python-dotenv==1.2.2
 requests==2.33.1
 fastapi==0.136.0
 fastapi[standard]
+mcp==2.0.0

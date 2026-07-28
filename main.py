@@ -24,6 +24,8 @@ from connectors.vikunja_connector import (
     subtasks_enabled,
     vikunja_enabled,
 )
+from connectors.usage_connector import buffering_active, usage_alert_message
+from connectors.buffer_connector import add_buffered, delete_buffered, due_buffered, read_buffered
 from agent import prompt
 from connectors.chat_connector import register_commands, send_message, read_messages
 from datetime import datetime
@@ -55,6 +57,13 @@ def heartbeat() -> bool:
         return True
     return False
 
+def deferred_prompt(text: str, source: str) -> str:
+    # Above the usage threshold background work waits for the next window instead of burning it
+    if buffering_active():
+        add_buffered(text, source)
+        return ""
+    return prompt(text)
+
 if __name__ == "__main__":
     try:
         # if IDENTITY.md and .env doesn't exist, create them with default content
@@ -74,6 +83,8 @@ if __name__ == "__main__":
             "hood/human_pending.json": '{"tasks": []}',
             "hood/calendar_oauth.json": '{"state": "", "refresh_token": "", "redirect_uri": ""}',  
             "hood/whitelist.json": '[]',
+            "hood/buffer.json": '{"items": []}',
+            "hood/claude_code.json": '{"model": "", "effort": "", "notified_for_reset": 0}',
             "hood/notebook.md": "",
         }
         for path, default in hood_files.items():
@@ -120,19 +131,22 @@ if __name__ == "__main__":
                     for task in tasks:
                         task_time = calendar.timegm(time.strptime(task["timestamp"], "%Y-%m-%dT%H:%M:%SZ"))
                         if now >= task_time:
-                            response = prompt(f"[system] This task just triggered, if it requires a tool, execute, if not, treat as a notification to the user: {task['task']}")
-                            send_message(f"🕰️ {response}")
+                            response = deferred_prompt(f"[system] This task just triggered, if it requires a tool, execute, if not, treat as a notification to the user: {task['task']}", "task")
+                            if response:
+                                send_message(f"🕰️ {response}")
                             delete_task(task["id"])
                     routines = read_routines()
                     for routine in routines:
                         routine_start = calendar.timegm(time.strptime(routine["start_time"], "%Y-%m-%dT%H:%M:%SZ"))
                         if now >= routine_start and (now - routine_start) % routine["interval"] < heartbeat_interval_seconds:
-                            response = prompt(f"[system] This routine just triggered, if it requires a tool, execute, if not, treat as a notification to the user: {routine['task']}")
-                            send_message(f"♾️ {response}")
+                            response = deferred_prompt(f"[system] This routine just triggered, if it requires a tool, execute, if not, treat as a notification to the user: {routine['task']}", "routine")
+                            if response:
+                                send_message(f"♾️ {response}")
                     calendar_events = calendar_today()
                     if isinstance(calendar_events, list) and calendar_events:
-                        response = prompt(f"[system] These are today's calendar events: {calendar_events}. If it requires a tool, execute, if not, treat as a notification to the user.")
-                        send_message(f"📅 {response}")
+                        response = deferred_prompt(f"[system] These are today's calendar events: {calendar_events}. If it requires a tool, execute, if not, treat as a notification to the user.", "calendar")
+                        if response:
+                            send_message(f"📅 {response}")
                     elif isinstance(calendar_events, dict):
                         print(f"⚠️ Calendar daily check failed: {calendar_events.get('message')}")
                     if vikunja_enabled() and now - last_vikunja_check >= vikunja_watch_interval_seconds:
@@ -153,64 +167,85 @@ if __name__ == "__main__":
                                     "If one is clearly a multi-step project, break it into 3 to 6 small subtasks with add_subtasks and mention you did, "
                                     "so its progress bar and Gantt view work; if the breakdown isn't obvious, don't guess, just acknowledge. "
                                 ) if subtasks_enabled() else ""
-                                response = prompt(
+                                response = deferred_prompt(
                                     "[system] The user just added these to-dos directly in Vikunja (not through you): "
                                     f"{json.dumps(new_todos)}. Acknowledge them in one or two friendly sentences, mentioning the titles. "
                                     "Capturing the thought was the win, so don't demand decisions. "
                                     f"{breakdown_hint}"
                                     "Ask at most one short optional question, and only if something is clearly time-sensitive and missing a due date. "
-                                    "No guilt, no lectures, no other tools."
+                                    "No guilt, no lectures, no other tools.",
+                                    "new to-dos",
                                 )
                                 if response.startswith("⚠️ Failed communicating"):
                                     print(f"⚠️ Vikunja watcher: LLM unavailable, will retry announcing new to-dos on the next check.")
                                 else:
-                                    send_message(f"👀 {response}")
+                                    if response:
+                                        send_message(f"👀 {response}")
                                     mark_todos_seen([todo["id"] for todo in new_todos])
                             if completed_todos:
-                                response = prompt(
+                                response = deferred_prompt(
                                     "[system] The user just completed these to-dos in Vikunja: "
                                     f"{json.dumps(completed_todos)}. Cheer them on! One or two sentences, genuine and warm, "
                                     "mentioning what they finished. Finishing things is a real win worth "
-                                    "celebrating. No 'what's next', no new demands, don't use tools."
+                                    "celebrating. No 'what's next', no new demands, don't use tools.",
+                                    "completed to-dos",
                                 )
                                 if response.startswith("⚠️ Failed communicating"):
                                     print(f"⚠️ Vikunja watcher: LLM unavailable, will retry cheering completed to-dos on the next check.")
                                 else:
-                                    send_message(f"🎉 {response}")
+                                    if response:
+                                        send_message(f"🎉 {response}")
                                     mark_todos_done([todo["id"] for todo in completed_todos])
                     focus_todos = daily_focus_todos()
                     if isinstance(focus_todos, list):
                         if not focus_todos:
                             mark_focus_sent()
                         else:
-                            response = prompt(
+                            response = deferred_prompt(
                                 "[system] Morning focus time. These are the user's pending to-dos: "
                                 f"{json.dumps(focus_todos)}. Keep this light: pick at most 3 that matter most today "
                                 "(due or overdue first), then suggest exactly one to start with, with a first step so small it takes two minutes. "
-                                "Be brief, warm and encouraging. Never mention how many tasks are pending in total, never guilt about overdue ones."
+                                "Be brief, warm and encouraging. Never mention how many tasks are pending in total, never guilt about overdue ones.",
+                                "daily focus",
                             )
                             if response.startswith("⚠️ Failed communicating"):
                                 print("⚠️ Vikunja focus: LLM unavailable, will retry on the next heartbeat.")
                             else:
-                                send_message(f"🎯 {response}")
+                                if response:
+                                    send_message(f"🎯 {response}")
                                 mark_focus_sent()
                     dateless_todos = daily_dateless_todos()
                     if isinstance(dateless_todos, list):
                         if not dateless_todos:
                             mark_date_nudge_sent()
                         else:
-                            response = prompt(
+                            response = deferred_prompt(
                                 "[system] Daily planning nudge. These to-dos have no due date: "
                                 f"{json.dumps(dateless_todos)}. In one short friendly message, list them (at most 5) and ask the user "
                                 "to reply with rough dates so their Gantt timeline and planning views stay useful. Make clear that rough "
                                 "answers like 'friday' or 'next week' are fine and that skipping any of them is ok. "
-                                "When they reply later, set the dates with the update_todo tool. No guilt, keep it inviting."
+                                "When they reply later, set the dates with the update_todo tool. No guilt, keep it inviting.",
+                                "date nudge",
                             )
                             if response.startswith("⚠️ Failed communicating"):
                                 print("⚠️ Vikunja date nudge: LLM unavailable, will retry on the next heartbeat.")
                             else:
-                                send_message(f"🗓️ {response}")
+                                if response:
+                                    send_message(f"🗓️ {response}")
                                 mark_date_nudge_sent()
+                    usage_alert = usage_alert_message()
+                    if usage_alert:
+                        send_message(f"🪫 {usage_alert} Queued so far: {len(read_buffered())} item(s).")
+                    buffered = due_buffered()
+                    if buffered:
+                        # one per heartbeat, so draining a full queue doesn't immediately burn the fresh window
+                        item = buffered[0]
+                        response = prompt(f"[system] This work was buffered while the usage window was full ({item['source']}, buffered at {item['timestamp']}): {item['task']}")
+                        if response.startswith("⚠️ Failed communicating"):
+                            print("⚠️ Work buffer: LLM unavailable, will retry on the next heartbeat.")
+                        else:
+                            send_message(f"🪫 {response}")
+                            delete_buffered(item["id"])
 
             except Exception as e:
                 try:

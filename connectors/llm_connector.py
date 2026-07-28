@@ -4,6 +4,7 @@ import os
 import requests
 from dotenv import load_dotenv
 from connectors.claude_code_connector import claude_code_enabled, prompt_claude_code
+from connectors.usage_connector import buffering_active
 load_dotenv()
 
 
@@ -45,7 +46,8 @@ def _load_tools_from_disk() -> tuple[list[dict], dict]:
 
 
 def prompt_model(text: str, tools=None, tool_handlers=None, host=None, key=None, model=None, claude_model=None, _allow_fallback=True) -> str:
-    if _allow_fallback and claude_code_enabled():
+    # Above the usage threshold the Claude window is saved for buffered work, so chat uses the configured LLM
+    if _allow_fallback and claude_code_enabled() and not buffering_active():
         try:
             return prompt_claude_code(text, model=claude_model, use_tools=bool(tools), original_prompt=_extract_original_user_prompt(text))
         except Exception as e:

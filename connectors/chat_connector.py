@@ -24,7 +24,9 @@ from connectors.human_connector import read_human_tasks, get_human_task, delete_
 from connectors.whitelist_connector import add_to_whitelist, remove_from_whitelist, read_whitelist
 from connectors.internet_connector import check_internet_connection
 from connectors.update_connector import run_self_update, restart_process
-from connectors.claude_code_connector import claude_code_enabled
+from connectors.claude_code_connector import claude_code_enabled, claude_settings, set_claude_effort, set_claude_model
+from connectors.usage_connector import claude_usage, buffer_threshold_percent
+from connectors.buffer_connector import add_buffered, delete_buffered, read_buffered
 from agent import prompt
 
 
@@ -386,7 +388,62 @@ def read_messages():
                 except Exception as e:
                     send_message(f"Sorry, I couldn't restart right now, can we try again? Details: {e}")
             elif _is_command(message, "/model"):
-                send_message(os.getenv("CLAUDE_CODE_MODEL", "sonnet") if claude_code_enabled() else os.getenv("LLM_MODEL", "unknown"))
+                if not claude_code_enabled():
+                    send_message(os.getenv("LLM_MODEL", "unknown"))
+                    continue
+                model = message[len("/model"):].strip()
+                if model:
+                    result = set_claude_model(model)
+                    if result["status"] == "error":
+                        send_message(f"🧠 {result['message']}")
+                        continue
+                    send_message(f"🧠 Model set to {claude_settings()['model']}, starting from the next message.")
+                else:
+                    send_message(f"🧠 Current model: {claude_settings()['model']}\nSet another one with /model opus, or /model default")
+            elif _is_command(message, "/effort"):
+                if not claude_code_enabled():
+                    send_message("Effort levels need the Claude Code CLI. To enable it, set ENABLE_CLAUDE_CODE=true in your .env file.")
+                    continue
+                level = message[len("/effort"):].strip().lower()
+                if level:
+                    result = set_claude_effort(level)
+                    if result["status"] == "error":
+                        send_message(f"🎚️ {result['message']}")
+                        continue
+                    send_message(f"🎚️ Effort set to {claude_settings()['effort'] or 'the CLI default'}, starting from the next message.")
+                else:
+                    send_message(f"🎚️ Current effort: {claude_settings()['effort'] or 'the CLI default'}\nSet another one with /effort high, or /effort default")
+            elif _is_command(message, "/usage"):
+                usage = claude_usage()
+                if usage.get("status") != "success":
+                    send_message(f"Sorry, I couldn't read the usage. {usage.get('message')}")
+                    continue
+                send_message(
+                    f"📊 Claude usage\n"
+                    f"5 hour window: {usage['five_hour_percent']}% used, resets in {usage['five_hour_resets_in']}\n"
+                    f"7 day window: {usage['seven_day_percent']}% used, resets in {usage['seven_day_resets_in']}\n"
+                    f"Background work is buffered from {buffer_threshold_percent()}%. Queued now: {len(read_buffered())} item(s)."
+                )
+            elif _is_command(message, "/later"):
+                task = message[len("/later"):].strip()
+                if not task:
+                    send_message("Usage: /later <something to do in the next usage window>")
+                    continue
+                send_message(add_buffered(task, "user"))
+            elif _is_command(message, "/listbuffer"):
+                buffered = read_buffered()
+                if not buffered:
+                    send_message("🪫 Nothing buffered for the next usage window.")
+                    continue
+                buffer_list = "\n".join([f"{item['id']}. [{item['source']}] {item['task']}" for item in buffered])
+                send_message(f"🪫 Waiting for the next usage window:\n{buffer_list}")
+            elif _is_command(message, "/deletebuffer"):
+                try:
+                    item_id = int(message[len("/deletebuffer"):].strip())
+                    delete_buffered(item_id)
+                    send_message(f"🪫 Buffered item {item_id} deleted.")
+                except Exception as e:
+                    send_message(f"Sorry, I couldn't delete that buffered item, can we try again? Details: {e}")
             elif _is_command(message, "/help"):
                 try:
                     # Prints README.md content

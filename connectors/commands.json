@@ -86,7 +86,7 @@
         },
         {
             "command": "model",
-            "description": "Get the current model being used"
+            "description": "Get the current model, or switch it. Example: /model opus, /model default"
         },
         {
             "command": "help",
@@ -127,6 +127,26 @@
         {
             "command": "restart",
             "description": "Restart the system"
+        },
+        {
+            "command": "effort",
+            "description": "Get the reasoning effort, or set it. Example: /effort high, /effort default"
+        },
+        {
+            "command": "usage",
+            "description": "Show how much of the Claude 5 hour and 7 day windows is used"
+        },
+        {
+            "command": "later",
+            "description": "Queue something for the next usage window. Example: /later tidy up my notes"
+        },
+        {
+            "command": "listbuffer",
+            "description": "List the work waiting for the next usage window"
+        },
+        {
+            "command": "deletebuffer",
+            "description": "Delete a buffered item by id. Example: /deletebuffer 3"
         }
     ]
 }

@@ -135,12 +135,11 @@ Knowledge base (AppFlowy):
 - Configure in `.env`: set `ENABLE_APPFLOWY=true`, `APPFLOWY_API_HOST` (e.g. `https://beta.appflowy.cloud` or your self-hosted instance), `APPFLOWY_EMAIL` and `APPFLOWY_PASSWORD`.
 - AppFlowy has no API tokens, so the agent logs in with your credentials and caches the refresh token in `hood/appflowy_token.json`.
 - Optional: `APPFLOWY_WORKSPACE_ID` (defaults to your first workspace) and `APPFLOWY_DEFAULT_DATABASE_ID` (the database new rows go to when the agent isn't told which one).
-- AppFlowy is the knowledge base and notes system, Vikunja stays the to-do list. There are no manual commands; the agent uses it through its tools: list databases, list and add database rows, update a row it created, list pages, create pages and append text to them.
-- Four limits come from the AppFlowy API itself, and the agent is told about each one:
-  - **Nothing can be deleted** — there is no delete endpoint for rows or pages. Delete in the AppFlowy app instead.
-  - **Rows can only be changed if the agent created them.** Updates go through an upsert keyed by the value the row was created with, so rows you add in the AppFlowy app are readable but not editable by the agent.
-  - **Page content is append-only** — nothing can edit or remove existing blocks.
-  - **Page bodies cannot be read back.** The API returns document content only as an encoded CRDT blob, so the agent can see page titles and structure but never the text inside a page.
+- AppFlowy is the shared knowledge base, Vikunja stays the to-do list. There are no manual commands; the agent uses it through its tools: list databases, list and add database rows, update a row it created, list pages, read a page, create a page, append text to a page, and move a page to trash.
+- Pages are read back as markdown — headings, bullets, checkboxes and quotes are all preserved — so the agent can look at a report or schema you wrote and work from it.
+- Two limits come from the AppFlowy API itself, and the agent is told about each one:
+  - **Page content is append-only.** New blocks can be added to the end of a page, but existing blocks cannot be edited or removed. To revise a page the agent reads it, then appends a correction or replaces the page.
+  - **Database rows cannot be deleted, and can only be changed by the agent if it created them.** Row updates go through an upsert keyed by the value the row was created with, so rows you add in the AppFlowy app are readable but not editable. Pages have no such limit — they can be renamed and trashed.
 
 Tools:
 

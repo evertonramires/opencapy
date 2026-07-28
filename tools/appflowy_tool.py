@@ -5,7 +5,9 @@ from connectors.appflowy_connector import (
     add_appflowy_row as connector_add_appflowy_row,
     update_appflowy_row as connector_update_appflowy_row,
     list_appflowy_pages as connector_list_appflowy_pages,
+    read_appflowy_page as connector_read_appflowy_page,
     add_appflowy_page as connector_add_appflowy_page,
+    delete_appflowy_page as connector_delete_appflowy_page,
     append_appflowy_text as connector_append_appflowy_text,
 )
 
@@ -28,6 +30,14 @@ def update_appflowy_row(row_key: str, fields: dict, database_id: str = "") -> di
 def list_appflowy_pages() -> dict:
     notify_tool_use("🔧📓📚 AppFlowy tool used to list pages.")
     return connector_list_appflowy_pages()
+
+def read_appflowy_page(view_id: str) -> dict:
+    notify_tool_use(f"🔧📓📖 AppFlowy tool used to read page {view_id}.")
+    return connector_read_appflowy_page(view_id)
+
+def delete_appflowy_page(view_id: str) -> dict:
+    notify_tool_use(f"🔧📓🗑️ AppFlowy tool used to move page {view_id} to trash.")
+    return connector_delete_appflowy_page(view_id)
 
 def add_appflowy_page(title: str, parent_view_id: str) -> dict:
     notify_tool_use(f"🔧📓📄 AppFlowy tool used to create page '{title}'.")
@@ -124,7 +134,7 @@ list_appflowy_pages_tool = {
     "type": "function",
     "function": {
         "name": "list_appflowy_pages",
-        "description": "List the page tree of the user's AppFlowy workspace, with each page's view_id, name and whether it is a space. Use this to find a page to append to, or a parent to create a new page under. Page titles are visible here, but page body text cannot be read back through the AppFlowy API.",
+        "description": "List the page tree of the user's AppFlowy workspace, with each page's view_id, name and whether it is a space. Use this to find a page to read or append to, or a parent to create a new page under. Use read_appflowy_page to get a page's contents.",
         "parameters": {
             "type": "object",
             "properties": {},
@@ -133,11 +143,47 @@ list_appflowy_pages_tool = {
     },
 }
 
+read_appflowy_page_tool = {
+    "type": "function",
+    "function": {
+        "name": "read_appflowy_page",
+        "description": "Read the full text of an AppFlowy page, rendered as markdown with its headings, bullets, checkboxes and quotes. Use list_appflowy_pages to find the view_id. Always read a page before appending to it, so you know what is already there.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "view_id": {
+                    "type": "string",
+                    "description": "The view_id of the page to read.",
+                },
+            },
+            "required": ["view_id"],
+        },
+    },
+}
+
+delete_appflowy_page_tool = {
+    "type": "function",
+    "function": {
+        "name": "delete_appflowy_page",
+        "description": "Move an AppFlowy page to the trash. The user can still restore it from the trash in the AppFlowy app. Database rows cannot be deleted this way, only pages.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "view_id": {
+                    "type": "string",
+                    "description": "The view_id of the page to move to trash.",
+                },
+            },
+            "required": ["view_id"],
+        },
+    },
+}
+
 add_appflowy_page_tool = {
     "type": "function",
     "function": {
         "name": "add_appflowy_page",
-        "description": "Create a new page in the user's AppFlowy workspace under an existing parent page or space. Use list_appflowy_pages to find a parent_view_id. Note that AppFlowy pages cannot be deleted through this tool.",
+        "description": "Create a new page in the user's AppFlowy workspace under an existing parent page or space. Use list_appflowy_pages to find a parent_view_id.",
         "parameters": {
             "type": "object",
             "properties": {
@@ -159,7 +205,7 @@ append_appflowy_text_tool = {
     "type": "function",
     "function": {
         "name": "append_appflowy_text",
-        "description": "Append text to the end of an AppFlowy page, one paragraph per line. AppFlowy only supports appending: existing content can never be edited or removed by this tool, and page body text cannot be read back either, so never claim to know what a page already contains.",
+        "description": "Append text to the end of an AppFlowy page, one paragraph per line. This only ever adds to the end: existing blocks cannot be edited or removed, so to revise a page read it first with read_appflowy_page and append a correction, or replace the page entirely.",
         "parameters": {
             "type": "object",
             "properties": {

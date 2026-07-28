@@ -221,6 +221,87 @@ def list_appflowy_pages() -> dict:
         return _request_error(response)
     return {"status": "success", "pages": _simplify_page(_data(response) or {})}
 
+def _block_text(block: dict, text_map: dict) -> str:
+    raw = text_map.get(block.get("external_id") or "", "")
+    if not raw:
+        return ""
+    try:
+        delta = json.loads(raw)
+    except Exception:
+        return raw
+    if isinstance(delta, list):
+        return "".join(op.get("insert", "") for op in delta if isinstance(op, dict))
+    return raw
+
+def _block_prefix(block_type: str, data: dict) -> str:
+    if block_type == "heading":
+        return "#" * int(data.get("level", 1)) + " "
+    if block_type == "todo_list":
+        return "- [x] " if data.get("checked") else "- [ ] "
+    if block_type == "bulleted_list":
+        return "- "
+    if block_type == "numbered_list":
+        return "1. "
+    if block_type == "quote":
+        return "> "
+    return ""
+
+def _render_document(document: dict) -> str:
+    """Walks the block tree AppFlowy returns and renders it as markdown-ish text.
+    Blocks hold their text in meta.text_map keyed by external_id, and their order
+    in meta.children_map keyed by the block's children id."""
+    blocks = document.get("blocks") or {}
+    meta = document.get("meta") or {}
+    children_map = meta.get("children_map") or {}
+    text_map = meta.get("text_map") or {}
+    lines = []
+
+    def walk(block_id: str, depth: int) -> None:
+        block = blocks.get(block_id) or {}
+        block_type = block.get("ty", "")
+        try:
+            data = json.loads(block.get("data") or "{}")
+        except Exception:
+            data = {}
+        if block_type == "divider":
+            lines.append("---")
+        elif block_type != "page":
+            text = _block_text(block, text_map)
+            if text:
+                lines.append("  " * max(depth - 1, 0) + _block_prefix(block_type, data) + text)
+        for child_id in children_map.get(block.get("children") or "", []):
+            walk(child_id, depth + 1)
+
+    walk(document.get("page_id") or "", 0)
+    return "\n".join(lines)
+
+def read_appflowy_page(view_id: str) -> dict:
+    if not appflowy_enabled():
+        return _disabled_error()
+    workspace_id = _workspace_id()
+    if isinstance(workspace_id, dict):
+        return workspace_id
+    response = _request("get", f"/api/workspace/v1/{workspace_id}/collab/{view_id}/json", params={"collab_type": 0})
+    if isinstance(response, dict):
+        return response
+    if not response.ok:
+        return _request_error(response)
+    document = ((_data(response) or {}).get("collab") or {}).get("document") or {}
+    return {"status": "success", "view_id": view_id, "text": _render_document(document)}
+
+def delete_appflowy_page(view_id: str) -> dict:
+    if not appflowy_enabled():
+        return _disabled_error()
+    workspace_id = _workspace_id()
+    if isinstance(workspace_id, dict):
+        return workspace_id
+    response = _request("post", f"/api/workspace/{workspace_id}/page-view/{view_id}/move-to-trash")
+    if isinstance(response, dict):
+        return response
+    if not response.ok:
+        return _request_error(response)
+    return {"status": "success", "message": f"Page {view_id} moved to trash."}
+
 def add_appflowy_page(title: str, parent_view_id: str) -> dict:
     if not appflowy_enabled():
         return _disabled_error()

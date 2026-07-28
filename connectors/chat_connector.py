@@ -393,8 +393,10 @@ def read_messages():
                     continue
                 model = message[len("/model"):].strip()
                 if model:
-                    # 'default' clears the override, otherwise there is no way back to the .env model from chat
-                    set_claude_model("" if model == "default" else model)
+                    result = set_claude_model(model)
+                    if result["status"] == "error":
+                        send_message(f"🧠 {result['message']}")
+                        continue
                     send_message(f"🧠 Model set to {claude_settings()['model']}, starting from the next message.")
                 else:
                     send_message(f"🧠 Current model: {claude_settings()['model']}\nSet another one with /model opus, or /model default")
@@ -403,12 +405,11 @@ def read_messages():
                     send_message("Effort levels need the Claude Code CLI. To enable it, set ENABLE_CLAUDE_CODE=true in your .env file.")
                     continue
                 level = message[len("/effort"):].strip().lower()
-                if level and level not in ["low", "medium", "high", "xhigh", "max", "default"]:
-                    send_message("Usage: /effort <low|medium|high|xhigh|max|default>\nUse /effort alone to see the current one.")
-                    continue
                 if level:
-                    # 'default' clears the override, otherwise there is no way back to the CLI default from chat
-                    set_claude_effort("" if level == "default" else level)
+                    result = set_claude_effort(level)
+                    if result["status"] == "error":
+                        send_message(f"🎚️ {result['message']}")
+                        continue
                     send_message(f"🎚️ Effort set to {claude_settings()['effort'] or 'the CLI default'}, starting from the next message.")
                 else:
                     send_message(f"🎚️ Current effort: {claude_settings()['effort'] or 'the CLI default'}\nSet another one with /effort high, or /effort default")

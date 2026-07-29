@@ -5,6 +5,7 @@ import re
 import threading
 import requests
 from dotenv import load_dotenv
+from connectors.transcription_connector import transcribe_audio, transcription_enabled
 load_dotenv()
 
 telegram_token = os.getenv("TELEGRAM_TOKEN")
@@ -115,6 +116,14 @@ def register_telegram_commands() -> None:
 	except Exception:
 		print(f"⚠️ Failed to register Telegram commands.")
 
+def _download_telegram_file(file_id: str) -> bytes:
+	file_path = requests.get(
+		f"https://api.telegram.org/bot{telegram_token}/getFile",
+		params={"file_id": file_id},
+		timeout=30,
+	).json()["result"]["file_path"]
+	return requests.get(f"https://api.telegram.org/file/bot{telegram_token}/{file_path}", timeout=300).content
+
 # TODO: convert to webhook
 def read_telegram_messages() -> list[str]:
 	global last_received_update_id
@@ -133,11 +142,17 @@ def read_telegram_messages() -> list[str]:
 		last_received_update_id = updates[-1]["update_id"]
 		with open(telegram_state_file, "w") as f:
 			json.dump({"last_received_update_id": last_received_update_id}, f)
-	return [
-		update["message"]["text"]
-		for update in updates
-		if "message" in update and "text" in update["message"]
-	]
+	messages = []
+	for update in updates:
+		message = update.get("message", {})
+		if "text" in message:
+			messages.append(message["text"])
+		elif transcription_enabled() and ("voice" in message or "audio" in message):
+			transcript = transcribe_audio(_download_telegram_file(message.get("voice", message.get("audio"))["file_id"]))
+			# Echoed back so a mishearing is visible instead of the agent quietly acting on the wrong words
+			send_telegram_message(f"🎤 {transcript}")
+			messages.append(transcript)
+	return messages
 	
 if __name__ == "__main__":
     send_telegram_message("Sending messages to Telegram is working!")

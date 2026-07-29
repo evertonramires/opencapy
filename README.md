@@ -179,6 +179,14 @@ Knowledge base (AppFlowy):
   - **Page content is append-only.** New blocks can be added to the end of a page, but existing blocks cannot be edited or removed. To revise a page the agent reads it, then appends a correction or replaces the page.
   - **Database rows cannot be deleted, and can only be changed by the agent if it created them.** Row updates go through an upsert keyed by the value the row was created with, so rows you add in the AppFlowy app are readable but not editable. Pages have no such limit — they can be renamed and trashed.
 
+Voice notes (Telegram):
+
+- Set `ENABLE_TRANSCRIPTION=true` in `.env` and talk to the bot by holding the mic button; forwarded audio files work the same way.
+- No extra credentials and no ffmpeg: transcription rides on the `LLM_API_HOST` and `LLM_API_KEY` you already configured, as long as that endpoint serves `/v1/audio/transcriptions` (an OpenAI-compatible gateway, LM Studio being the usual exception).
+- `TRANSCRIPTION_MODEL` picks the model, defaulting to `groq/whisper-large-v3-turbo`. The language is detected automatically, no configuration needed.
+- The transcript is echoed back as a 🎤 message before the agent replies, so a mishearing is visible instead of the agent quietly acting on the wrong words.
+- Transcripts are handed to the agent as plain text, so anything you can type you can also say — including commands.
+
 Tools:
 
 ```code

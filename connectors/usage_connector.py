@@ -25,6 +25,9 @@ def _access_token() -> str:
 
 
 def _resets_in(resets_at: str) -> str:
+    # The API sends no reset time and no utilization while no 5 hour window is open, after a quiet stretch
+    if not resets_at:
+        return "not started"
     seconds = int(datetime.fromisoformat(resets_at).timestamp() - time.time())
     if seconds <= 0:
         return "now"
@@ -81,10 +84,10 @@ def claude_usage() -> dict:
     seven_day = data["seven_day"]
     return _cache({
         "status": "success",
-        "five_hour_percent": five_hour["utilization"],
+        "five_hour_percent": five_hour["utilization"] or 0,
         "five_hour_resets_at": five_hour["resets_at"],
         "five_hour_resets_in": _resets_in(five_hour["resets_at"]),
-        "seven_day_percent": seven_day["utilization"],
+        "seven_day_percent": seven_day["utilization"] or 0,
         "seven_day_resets_at": seven_day["resets_at"],
         "seven_day_resets_in": _resets_in(seven_day["resets_at"]),
     })
@@ -103,10 +106,10 @@ def buffering_active() -> bool:
 
 def window_resets_at() -> int:
     """Epoch second the current 5 hour window resets, used to stamp buffered work
-    so it waits for the next window. Zero when usage is unavailable, which makes
-    buffered items due immediately rather than stranding them."""
+    so it waits for the next window. Zero when usage is unavailable or no window is
+    open, and the buffer then falls back to waiting a whole window."""
     usage = claude_usage()
-    if usage.get("status") != "success":
+    if usage.get("status") != "success" or not usage["five_hour_resets_at"]:
         return 0
     # The API jitters this by a fraction of a second per call, so round to the minute
     # (resets land on the hour) to keep it usable as the once per window alert key

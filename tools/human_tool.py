@@ -4,15 +4,17 @@ from connectors.human_connector import add_human_task
 from connectors.chat_connector import send_message
 
 
-def ask_human(title: str, question: str, description: str, original_user_prompt: str = "") -> dict:
+def ask_human(title: str, question: str, description: str, original_user_prompt: str = "", options: list[str] | None = None) -> dict:
     notify_tool_use("🔧🤝💬 Human tool used to request user guidance.")
     timestamp = get_time("utc")
-    task = add_human_task(timestamp, title, question, description, original_user_prompt)
+    task = add_human_task(timestamp, title, question, description, original_user_prompt, options)
+    buttons = [[(option, f"/answer {task['id']} #{index}")] for index, option in enumerate(task["options"])]
     send_message(
         f"🤝 I need your help with pending task {task['id']} ({task['title']}).\n\n"
         f"Question: {task['question']}\n\n"
         f"Reply with: /answer {task['id']} <response>\n"
-        f"Tip: Use /listpending to see all tasks pending human interaction."
+        f"Tip: Use /listpending to see all tasks pending human interaction.",
+        buttons=buttons or None,
     )
     return {
         "status": "waiting_for_user",
@@ -45,7 +47,12 @@ ask_human_tool = {
                 "description": {
                     "type": "string",
                     "description": "A summary of the task/job being executed before you needed human help.",
-                }
+                },
+                "options": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Optional 2 to 4 likely answers, shown as tappable buttons so the user can reply with one tap instead of typing. Keep each under 30 characters. Leave empty when the answer is genuinely open ended.",
+                },
             },
             "required": ["title", "question", "description"],
         },

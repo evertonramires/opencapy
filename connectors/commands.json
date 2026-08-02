@@ -147,6 +147,62 @@
         {
             "command": "deletebuffer",
             "description": "Delete a buffered item by id. Example: /deletebuffer 3"
+        },
+        {
+            "command": "sprint",
+            "description": "Start a focus sprint on a to-do. Example: /sprint 12 25"
+        },
+        {
+            "command": "sprintdone",
+            "description": "Finish the running sprint and tick the to-do off. Example: /sprintdone 3"
+        },
+        {
+            "command": "sprintmore",
+            "description": "Add more minutes to the running sprint. Example: /sprintmore 3 10"
+        },
+        {
+            "command": "sprintstuck",
+            "description": "Say you're stuck so I can help shrink it. Example: /sprintstuck 3"
+        },
+        {
+            "command": "low",
+            "description": "Low energy? Get the smallest thing on your list"
+        },
+        {
+            "command": "shrink",
+            "description": "Rewrite a to-do into one smaller step. Example: /shrink 12"
+        },
+        {
+            "command": "snooze",
+            "description": "Push a to-do out by some days. Example: /snooze 12 7"
+        },
+        {
+            "command": "retitle",
+            "description": "Rewrite a to-do's title as a clear first action. Example: /retitle 12"
+        },
+        {
+            "command": "undotitle",
+            "description": "Put a to-do's original title back. Example: /undotitle 12"
+        },
+        {
+            "command": "approve",
+            "description": "Approve a drafted email or SMS and send it. Example: /approve 1"
+        },
+        {
+            "command": "reject",
+            "description": "Drop a drafted email or SMS without sending. Example: /reject 1"
+        },
+        {
+            "command": "tweak",
+            "description": "Change a draft before it goes out. Example: /tweak 1 make it shorter"
+        },
+        {
+            "command": "listapprovals",
+            "description": "List drafts waiting for your approval"
+        },
+        {
+            "command": "autopilot",
+            "description": "Show the to-dos I've queued to research"
         }
     ]
 }

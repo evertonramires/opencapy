@@ -10,7 +10,7 @@ def _ensure_human_pending():
             json.dump({"tasks": []}, f)
 
 
-def add_human_task(timestamp, title, question, description, original_user_prompt):
+def add_human_task(timestamp, title, question, description, original_user_prompt, options=None):
     _ensure_human_pending()
     tasks = read_human_tasks()
     next_id = max([item["id"] for item in tasks], default=0) + 1
@@ -21,6 +21,9 @@ def add_human_task(timestamp, title, question, description, original_user_prompt
         "question": question,
         "description": description,
         "original_user_prompt": original_user_prompt,
+        # Kept here rather than in the button itself: Telegram caps callback data at
+        # 64 bytes, so the tap carries an index and the text is looked up on the way back
+        "options": options or [],
     }
     tasks.append(task)
     with open(HUMAN_PENDING_PATH, "w") as f:

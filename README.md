@@ -179,6 +179,16 @@ Knowledge base (AppFlowy):
   - **Page content is append-only.** New blocks can be added to the end of a page, but existing blocks cannot be edited or removed. To revise a page the agent reads it, then appends a correction or replaces the page.
   - **Database rows cannot be deleted, and can only be changed by the agent if it created them.** Row updates go through an upsert keyed by the value the row was created with, so rows you add in the AppFlowy app are readable but not editable. Pages have no such limit — they can be renamed and trashed.
 
+Notes and docs (AFFiNE):
+
+- Configure in `.env`: set `ENABLE_AFFINE=true`, `AFFINE_API_HOST` (e.g. `https://affine.example.com`), `AFFINE_EMAIL` and `AFFINE_PASSWORD`.
+- AFFiNE 0.27 removed API tokens, so the agent signs in with your credentials and caches the session in `hood/affine_session.json`. Creating a dedicated AFFiNE account for the agent and inviting it to your workspace keeps it separate from your own login.
+- Optional: `AFFINE_WORKSPACE_ID` (defaults to the first workspace of the account).
+- There are no manual commands; the agent uses it through its tools: list docs, search docs, read a doc, create a doc, and append to a doc.
+- Docs are read and written as markdown — headings, bullets and quotes become real AFFiNE blocks rather than literal text.
+- Search is server side and full text, returning a highlighted snippet of the matching text, so the agent can find a note without reading everything.
+- **AFFiNE has no API for doc content.** Pages are CRDT documents synced over a websocket, so this connector speaks that protocol directly (`pycrdt` and `python-socketio`). It is version checked: if you upgrade AFFiNE and it starts refusing the sync channel, bump `AFFINE_CLIENT_VERSION` to match your server. Everything else here rides on the regular GraphQL API.
+
 Voice notes (Telegram):
 
 - Set `ENABLE_TRANSCRIPTION=true` in `.env` and talk to the bot by holding the mic button; forwarded audio files work the same way.
@@ -245,6 +255,79 @@ Human escalation:
 /listpending - list pending human guidance tasks
 /answer 3 proceed with option A - answer pending task id 3
 ```
+
+Focus sprints (`ENABLE_SPRINTS=true`):
+
+```code
+/sprint 12 - start a 25 minute sprint on to-do 12 (add a number for a different length)
+/sprintdone 3 - finish sprint 3 and tick the to-do off
+/sprintmore 3 10 - add 10 more minutes
+/sprintstuck 3 - say you're stuck, and get help shrinking it
+/low - low energy, get the smallest thing on your list
+/shrink 12 - rewrite to-do 12 into one smaller step
+/snooze 12 7 - push to-do 12 out by 7 days
+```
+
+Steering a to-do from Vikunja (`ENABLE_TODO_COMMENTS=true`):
+
+Leave a comment on any to-do and Capy picks it up, does what you asked (moves the
+date, adds detail, breaks it into steps, goes and researches it) and replies in the
+same thread, signed, so the conversation about a task stays on the task. You get a
+short heads-up in chat too. It only fetches the threads of tasks that actually
+changed, so a quiet list costs one request.
+
+Better titles (`ENABLE_TODO_RETITLE=true`):
+
+A to-do jotted down as "dentist" is a decision you have to make again every time you
+see it. Capy rewrites vague titles into the first concrete action — "Call the dentist
+to book a cleaning" — using only what you actually wrote, and leaves clear ones alone.
+The acknowledgement carries an **Undo** button, and your original is kept either way.
+
+```code
+/retitle 12 - rewrite to-do 12's title as a clear first action
+/undotitle 12 - put your own title back
+```
+
+When a sprint's time is up you get a message with **Done / +10 min / Stuck** buttons,
+so answering is one tap.
+
+Autopilot (`ENABLE_AUTOPILOT=true`):
+
+When you add a to-do, Capy decides whether it can move it forward on its own. If it
+can, it researches it in the background and writes what it found into the to-do
+description under a "🔎 Capy notes" heading, then tells you the one useful fact and
+the one small next step. Anything you wrote yourself is never overwritten.
+
+```code
+/autopilot - show what's queued and how much of today's budget is left
+```
+
+It only takes on things it can genuinely do alone (finding a phone number, checking
+opening hours, comparing prices, gathering links, drafting a message). It is capped at
+`AUTOPILOT_MAX_PER_DAY` and pauses entirely while the usage window is nearly spent.
+
+Approvals:
+
+Emails and SMS are never sent straight away. Capy drafts them and sends you a card
+with **Send / Change / Drop** buttons. Tapping Change lets you just say what to fix,
+by text or voice note, and it redrafts.
+
+```code
+/listapprovals - list drafts waiting on you
+/approve 1 - send draft 1
+/reject 1 - drop draft 1
+/tweak 1 make it shorter - redraft it
+```
+
+Approving runs exactly the message you saw, with no model in between, so what goes out
+is what you approved. Drafts nobody answers expire after `APPROVAL_EXPIRY_HOURS`.
+Widen the gate to other tools with `APPROVAL_REQUIRED_TOOLS`.
+
+Weekly review (`WEEKLY_REVIEW_DAY=6` for Sunday):
+
+Once a week Capy offers up to 3 to-dos nobody has touched in `STALE_TODO_DAYS`, each
+with **Make it smaller / Next week / Drop it** buttons, and sends a short note about
+what you actually finished that week.
 
 ## Chat API docs
 

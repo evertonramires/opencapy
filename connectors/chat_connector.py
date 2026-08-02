@@ -1,7 +1,8 @@
 import json
 import os
+from datetime import datetime, timedelta, timezone
 from connectors.api_connector import send_api_message, read_api_messages
-from connectors.telegram_connector import send_telegram_message, read_telegram_messages, send_telegram_typing_action, register_telegram_commands
+from connectors.telegram_connector import send_telegram_message, read_telegram_messages, send_telegram_typing_action, register_telegram_commands, edit_telegram_message
 from connectors.notebook_connector import add_note, delete_note, read_notes
 from connectors.identity_connector import read_identity, write_identity
 from connectors.tools_connector import list_tools
@@ -19,8 +20,30 @@ from connectors.vikunja_connector import (
     list_todos,
     complete_todo,
     delete_todo,
+    get_todo,
+    restore_todo_title,
+    retitle_enabled,
+    undo_title_buttons,
+    update_todo,
+)
+from connectors.autopilot_connector import autopilot_enabled, read_queue, remaining_today
+from connectors.sprint_connector import (
+    default_minutes,
+    end_sprint,
+    extend_sprint,
+    get_sprint,
+    sprints_enabled,
+    start_sprint,
 )
 from connectors.human_connector import read_human_tasks, get_human_task, delete_human_task
+from connectors.approval_connector import (
+    delete_approval,
+    execute_approval,
+    get_approval,
+    pending_tweak,
+    read_approvals,
+    set_awaiting_tweak,
+)
 from connectors.whitelist_connector import add_to_whitelist, remove_from_whitelist, read_whitelist
 from connectors.internet_connector import check_internet_connection
 from connectors.update_connector import run_self_update, restart_process
@@ -45,12 +68,31 @@ def _format_routine_interval(interval_seconds: int) -> str:
 def _is_command(message: str, command: str) -> bool:
     return message == command or message.startswith(f"{command} ")
 
+
+def _rework_approval(approval: dict, instructions: str) -> None:
+    """Drops the old draft and lets the agent redraft it, which re-parks a fresh
+    approval, so a corrected message still needs an explicit OK before it goes out."""
+    send_message(f"✏️ Reworking the {approval['label']}...")
+    delete_approval(approval["id"])
+    response = prompt(
+        f"[system] The user reviewed a {approval['label']} you drafted and asked for changes before it goes out.\n\n"
+        f"Original draft ({approval['tool']}): {json.dumps(approval['args'])}\n"
+        f"What they want changed: {instructions}\n\n"
+        f"Call {approval['tool']} again with the corrected content. It will be shown to them for approval again, "
+        f"so do not claim it was sent."
+    )
+    send_message(response)
+
 def register_commands():
     register_telegram_commands()
 
-def send_message(message: str) -> None:
-    send_telegram_message(message)
+def send_message(message: str, buttons=None) -> int | None:
+    """Returns the Telegram message id when there is one, so callers holding a card
+    with buttons can rewrite it once the user decides. The web UI has no buttons, so
+    it just receives the text and the typed command stays the way in from there."""
+    message_id = send_telegram_message(message, buttons)
     send_api_message(message)
+    return message_id
 
 def read_messages():
     messages = []
@@ -278,6 +320,15 @@ def read_messages():
                     if not task:
                         send_message(f"Pending task {task_id} not found. Use /listpending to check open task ids.")
                         continue
+                    # A tapped button sends "#<index>" because callback data is too small
+                    # to carry the answer text itself
+                    if answer.startswith("#") and answer[1:].isdigit():
+                        options = task.get("options") or []
+                        index = int(answer[1:])
+                        if index >= len(options):
+                            send_message(f"That option is no longer available for task {task_id}. Reply with /answer {task_id} <response>.")
+                            continue
+                        answer = options[index]
                     task_title = task.get("title", "Human guidance")
                     task_question = task.get("question", task_title)
                     task_description = task.get("description", "")
@@ -298,6 +349,209 @@ def read_messages():
                     delete_human_task(task_id)
                 except Exception as e:
                     send_message(f"Sorry, I couldn't process your answer, can we try again? Details: {e}")
+            elif _is_command(message, "/sprint"):
+                try:
+                    if not sprints_enabled():
+                        send_message("Sprints are disabled. To enable them, set ENABLE_SPRINTS=true in your .env file.")
+                        continue
+                    raw = message[len("/sprint"):].strip().split()
+                    if not raw or not raw[0].isdigit():
+                        send_message("Usage: /sprint <todo_id> [minutes]\nUse /listtodos to find the id.")
+                        continue
+                    todo_id = int(raw[0])
+                    minutes = int(raw[1]) if len(raw) > 1 and raw[1].isdigit() else default_minutes()
+                    found = get_todo(todo_id)
+                    if found.get("status") != "success":
+                        send_message(f"Sorry, I couldn't find that to-do. {found.get('message')}")
+                        continue
+                    title = found["todo"]["title"]
+                    sprint = start_sprint(todo_id, title, minutes)
+                    extra = " (dropped the one already running)" if sprint["replaced"] else ""
+                    send_message(f"⏳ {minutes} minutes on **{title}**, starting now{extra}. I'll check in when it's up.")
+                except Exception as e:
+                    send_message(f"Sorry, I couldn't start that, can we try again? Details: {e}")
+            elif _is_command(message, "/sprintdone"):
+                try:
+                    sprint = get_sprint(int(message[len("/sprintdone"):].strip()))
+                    if not sprint:
+                        send_message("That sprint is already wrapped up.")
+                        continue
+                    end_sprint(sprint["id"])
+                    result = complete_todo(sprint["todo_id"])
+                    if result.get("status") == "error":
+                        send_message(f"🎉 Nice work on {sprint['title']}! I couldn't tick it off in Vikunja though: {result.get('message')}")
+                        continue
+                    send_message(f"🎉 **{sprint['title']}** done and ticked off. That's the hard part over.")
+                except Exception as e:
+                    send_message(f"Sorry, I couldn't close that sprint, can we try again? Details: {e}")
+            elif _is_command(message, "/sprintmore"):
+                try:
+                    parts = message[len("/sprintmore"):].strip().split()
+                    sprint = get_sprint(int(parts[0]))
+                    if not sprint:
+                        send_message("That sprint is already wrapped up. Start a new one with /sprint <todo_id>.")
+                        continue
+                    minutes = int(parts[1]) if len(parts) > 1 and parts[1].isdigit() else 10
+                    extend_sprint(sprint["id"], minutes)
+                    send_message(f"⏳ {minutes} more minutes on **{sprint['title']}**. Keep going.")
+                except Exception as e:
+                    send_message(f"Sorry, I couldn't extend that, can we try again? Details: {e}")
+            elif _is_command(message, "/sprintstuck"):
+                try:
+                    sprint = get_sprint(int(message[len("/sprintstuck"):].strip()))
+                    if not sprint:
+                        send_message("That sprint is already wrapped up.")
+                        continue
+                    end_sprint(sprint["id"])
+                    response = prompt(
+                        f"[system] The user just spent {sprint['minutes']} minutes on the to-do '{sprint['title']}' "
+                        f"(id {sprint['todo_id']}) and said they're stuck. Getting stuck is information, not failure, so no "
+                        "sympathy speech and absolutely no guilt. Ask exactly one short question to find where it jammed, "
+                        "or if it's obvious the task is too big, offer to shrink it to a first step so small it's almost silly. "
+                        "Two sentences maximum."
+                    )
+                    send_message(f"🤔 {response}")
+                except Exception as e:
+                    send_message(f"Sorry, I couldn't handle that, can we try again? Details: {e}")
+            elif _is_command(message, "/shrink"):
+                try:
+                    todo_id = int(message[len("/shrink"):].strip())
+                    found = get_todo(todo_id)
+                    if found.get("status") != "success":
+                        send_message(f"Sorry, I couldn't find that to-do. {found.get('message')}")
+                        continue
+                    response = prompt(
+                        f"[system] This to-do has been sitting untouched and the user wants it made smaller: "
+                        f"{json.dumps(found['todo'])}. Rewrite it with update_todo so the title is one concrete action "
+                        "they could finish in about ten minutes, keeping the rest for later in the description. "
+                        "Then tell them the new version in one short sentence. No lecture about why it stalled."
+                    )
+                    send_message(f"🔪 {response}")
+                except Exception as e:
+                    send_message(f"Sorry, I couldn't shrink that, can we try again? Details: {e}")
+            elif _is_command(message, "/undotitle"):
+                try:
+                    todo_id = int(message[len("/undotitle"):].strip())
+                    result = restore_todo_title(todo_id)
+                    if result.get("status") != "success":
+                        send_message(f"Sorry, I couldn't put that title back. {result.get('message')}")
+                        continue
+                    send_message(f"↩️ Back to your words: **{result['title']}**")
+                except Exception as e:
+                    send_message(f"Usage: /undotitle <todo_id>. Details: {e}")
+            elif _is_command(message, "/retitle"):
+                try:
+                    if not retitle_enabled():
+                        send_message("Title rewriting is off. Set ENABLE_TODO_RETITLE=true to turn it on.")
+                        continue
+                    todo_id = int(message[len("/retitle"):].strip())
+                    found = get_todo(todo_id)
+                    if found.get("status") != "success":
+                        send_message(f"Sorry, I couldn't find that to-do. {found.get('message')}")
+                        continue
+                    response = prompt(
+                        f"[system] The user wants this to-do's title made easier to start: {json.dumps(found['todo'])}. "
+                        "Call improve_todo_title on it, then tell them the new wording in one short sentence. "
+                        "If the title is already a clear action, say so and change nothing."
+                    )
+                    send_message(f"✒️ {response}", buttons=undo_title_buttons())
+                except Exception as e:
+                    send_message(f"Usage: /retitle <todo_id>. Details: {e}")
+            elif _is_command(message, "/snooze"):
+                try:
+                    parts = message[len("/snooze"):].strip().split()
+                    todo_id = int(parts[0])
+                    days = int(parts[1]) if len(parts) > 1 and parts[1].isdigit() else 7
+                    due = datetime.now(timezone.utc) + timedelta(days=days)
+                    result = update_todo(todo_id, due_date=due.strftime("%Y-%m-%dT%H:%M:%SZ"))
+                    if result.get("status") == "error":
+                        send_message(f"Sorry, I couldn't move that. {result.get('message')}")
+                        continue
+                    send_message(f"📅 Pushed **{result['todo']['title']}** out {days} days. Off your plate for now.")
+                except Exception as e:
+                    send_message(f"Sorry, I couldn't snooze that, can we try again? Details: {e}")
+            elif _is_command(message, "/low"):
+                try:
+                    todos = list_todos()
+                    if isinstance(todos, dict) and todos.get("status") == "error":
+                        send_message(f"Sorry, I couldn't check the to-dos. {todos.get('message')}")
+                        continue
+                    if not todos:
+                        send_message("Nothing pending. Go rest 🌱")
+                        continue
+                    response = prompt(
+                        "[system] The user is running on empty and wants something easy. These are their pending to-dos: "
+                        f"{json.dumps(todos)}. Pick the single smallest one, the one closest to being finishable in a few "
+                        "minutes with no thinking. Give it to them plus the first physical action. Two sentences, warm, "
+                        "no mention of anything else on the list."
+                    )
+                    send_message(f"🪶 {response}")
+                except Exception as e:
+                    send_message(f"Sorry, I couldn't pick one, can we try again? Details: {e}")
+            elif _is_command(message, "/approve"):
+                try:
+                    approval_id = int(message[len("/approve"):].strip())
+                    approval = get_approval(approval_id)
+                    if not approval:
+                        send_message(f"Approval {approval_id} not found, it may already be handled. Use /listapprovals to check.")
+                        continue
+                    result = execute_approval(approval_id)
+                    if result.get("status") != "success":
+                        send_message(f"Sorry, I couldn't send it. {result.get('message')}\nThe draft is still waiting, so you can try /approve {approval_id} again.")
+                        continue
+                    if approval.get("message_id"):
+                        edit_telegram_message(approval["message_id"], f"✅ Sent this {approval['label']}.\n\n{approval['summary']}")
+                    send_message(f"✅ {approval['label'].capitalize()} sent.")
+                except Exception as e:
+                    send_message(f"Sorry, I couldn't approve that, can we try again? Details: {e}")
+            elif _is_command(message, "/reject"):
+                try:
+                    approval_id = int(message[len("/reject"):].strip())
+                    approval = get_approval(approval_id)
+                    if not approval:
+                        send_message(f"Approval {approval_id} not found, it may already be handled.")
+                        continue
+                    delete_approval(approval_id)
+                    if approval.get("message_id"):
+                        edit_telegram_message(approval["message_id"], f"❌ Dropped this {approval['label']}, nothing was sent.")
+                    send_message(f"❌ Dropped it, nothing went out.")
+                except Exception as e:
+                    send_message(f"Sorry, I couldn't drop that, can we try again? Details: {e}")
+            elif _is_command(message, "/tweak"):
+                try:
+                    raw = message[len("/tweak"):].strip()
+                    parts = raw.split(" ", 1)
+                    approval_id = int(parts[0].strip())
+                    approval = get_approval(approval_id)
+                    if not approval:
+                        send_message(f"Approval {approval_id} not found, it may already be handled.")
+                        continue
+                    # Tapping the button carries no instructions, so remember which draft
+                    # the next message is about instead of making the user retype the id
+                    if len(parts) < 2 or not parts[1].strip():
+                        set_awaiting_tweak(approval_id)
+                        send_message(f"✏️ What should I change about the {approval['label']}? Just tell me, or send a voice note.")
+                        continue
+                    _rework_approval(approval, parts[1].strip())
+                except Exception as e:
+                    send_message(f"Sorry, I couldn't rework that, can we try again? Details: {e}")
+            elif _is_command(message, "/listapprovals"):
+                approvals = read_approvals()
+                if not approvals:
+                    send_message("🤝 Nothing waiting for your approval.")
+                    continue
+                approval_list = "\n".join([f"{a['id']}. [{a['label']}] {a['summary'].splitlines()[0]}" for a in approvals])
+                send_message(f"🤝 Waiting for your approval:\n{approval_list}\n\nApprove with /approve <id>, drop with /reject <id>.")
+            elif _is_command(message, "/autopilot"):
+                if not autopilot_enabled():
+                    send_message("Autopilot is disabled. To enable it, set ENABLE_AUTOPILOT=true in your .env file.")
+                    continue
+                queued = read_queue()
+                if not queued:
+                    send_message(f"🚀 Nothing queued. I can take on {remaining_today()} more to-do(s) today.")
+                    continue
+                queue_list = "\n".join([f"{job['todo_id']}. {job['goal']}" for job in queued])
+                send_message(f"🚀 Working on these next:\n{queue_list}\n\n{remaining_today()} left in today's budget.")
             elif _is_command(message, "/addnote"):
                 try:
                     note_text = message[len("/addnote"):].strip()
@@ -453,5 +707,10 @@ def read_messages():
                 except Exception as e:
                     send_message(f"Sorry, I couldn't read the README file, can we try again? Details: {e}")
             else:
+                # After tapping Change on a draft, the next thing they say is the correction
+                tweak = pending_tweak()
+                if tweak:
+                    _rework_approval(tweak, message)
+                    continue
                 response = prompt(f"User said: {message}")
-                send_message(response)
+                send_message(response, buttons=undo_title_buttons())

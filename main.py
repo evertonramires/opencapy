@@ -228,34 +228,34 @@ if __name__ == "__main__":
                                     if response:
                                         send_message(f"🎉 {response}")
                                     mark_todos_done([todo["id"] for todo in completed_todos])
-                        if comments_enabled():
-                            comment_updates = check_todo_comments()
-                            if comment_updates.get("status") != "success":
-                                print(f"⚠️ Vikunja comments: {comment_updates.get('message')}")
-                            for thread in comment_updates.get("threads", []):
-                                todo = thread["todo"]
-                                response = deferred_prompt(
-                                    "[system] The user just commented on one of their own to-dos in Vikunja. They are steering this task, "
-                                    "so treat the comment as an instruction about it and act on it, don't just acknowledge.\n\n"
-                                    f"To-do {todo['id']}: {todo['title']}\n"
-                                    f"Description: {todo['description'] or '(empty)'}\n"
-                                    f"The thread so far, oldest first: {json.dumps(thread['thread'])}\n"
-                                    f"What they just wrote: {json.dumps(thread['new_comments'])}\n\n"
-                                    "Do the thing they asked with the tools you have: change the due date, priority or title, write what you "
-                                    "know into the description, break it into steps, mark it done, or take the research on yourself. If it needs "
-                                    "digging you can genuinely do alone, queue it. If the next step is outward facing, like an email or a message "
-                                    "to someone, draft it with the right tool so it goes to them for approval, and never send it yourself.\n"
-                                    "Then always call reply_on_todo on this to-do to answer in the thread, saying plainly what you did or found, "
-                                    "so the conversation stays attached to the task. Finally reply here with at most two short sentences. "
-                                    "No preamble, no repeating their comment back at them.",
-                                    "to-do comment",
-                                )
-                                if response.startswith("⚠️ Failed communicating"):
-                                    print(f"⚠️ Vikunja comments: LLM unavailable, will retry to-do {todo['id']} on the next check.")
-                                else:
-                                    if response:
-                                        send_message(f"💬 {response}", buttons=undo_title_buttons())
-                                    mark_comments_seen(todo["id"], thread["seen"])
+                            if comments_enabled():
+                                comment_updates = check_todo_comments()
+                                if comment_updates.get("status") != "success":
+                                    print(f"⚠️ Vikunja comments: {comment_updates.get('message')}")
+                                for thread in comment_updates.get("threads", []):
+                                    todo = thread["todo"]
+                                    response = deferred_prompt(
+                                        "[system] The user just commented on one of their own to-dos in Vikunja. They are steering this task, "
+                                        "so treat the comment as an instruction about it and act on it, don't just acknowledge.\n\n"
+                                        f"To-do {todo['id']}: {todo['title']}\n"
+                                        f"Description: {todo['description'] or '(empty)'}\n"
+                                        f"The thread so far, oldest first: {json.dumps(thread['thread'])}\n"
+                                        f"What they just wrote: {json.dumps(thread['new_comments'])}\n\n"
+                                        "Do the thing they asked with the tools you have: change the due date, priority or title, write what you "
+                                        "know into the description, break it into steps, mark it done, or take the research on yourself. If it needs "
+                                        "digging you can genuinely do alone, queue it. If the next step is outward facing, like an email or a message "
+                                        "to someone, draft it with the right tool so it goes to them for approval, and never send it yourself.\n"
+                                        "Then always call reply_on_todo on this to-do to answer in the thread, saying plainly what you did or found, "
+                                        "so the conversation stays attached to the task. Finally reply here with at most two short sentences. "
+                                        "No preamble, no repeating their comment back at them.",
+                                        "to-do comment",
+                                    )
+                                    if response.startswith("⚠️ Failed communicating"):
+                                        print(f"⚠️ Vikunja comments: LLM unavailable, will retry to-do {todo['id']} on the next check.")
+                                    else:
+                                        if response:
+                                            send_message(f"💬 {response}", buttons=undo_title_buttons())
+                                        mark_comments_seen(todo["id"], thread["seen"])
                     focus_todos = daily_focus_todos()
                     if isinstance(focus_todos, list):
                         if not focus_todos:

@@ -1,6 +1,7 @@
 import json
 import os
 import requests
+import time
 from datetime import datetime, timezone
 
 _no_due_date = "0001-01-01T00:00:00Z"
@@ -14,6 +15,8 @@ _capy_comment_header = "<p>🐹 <b>Capy</b></p>"
 _capy_comment_marker = "<!-- capy -->"
 _seen_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "hood", "vikunja_seen.json")
 _request_timeout_seconds = 15
+_request_retries = 1
+_request_retry_delay_seconds = 2
 
 def vikunja_enabled() -> bool:
     return os.getenv("ENABLE_VIKUNJA", "false").lower() in ["true", "1", "yes"]
@@ -44,10 +47,22 @@ def _default_project_id() -> int:
     return int(os.getenv("VIKUNJA_DEFAULT_PROJECT_ID", "1"))
 
 def _request(method: str, path: str, **kwargs) -> requests.Response | dict:
-    try:
-        return requests.request(method, _api_url(path), headers=_headers(), timeout=_request_timeout_seconds, **kwargs)
-    except requests.RequestException as e:
-        return {"status": "error", "tool": "vikunja", "message": f"Vikunja is unreachable: {e}"}
+    """Retries once when the connection itself fails. A tailnet ingress occasionally
+    answers a handshake with a TLS internal error and recovers on its own moments
+    later, which is not worth interrupting the user for. Only connection level
+    failures are retried, never timeouts: a timeout may mean the request arrived and
+    was applied, and re-sending it would be a second write."""
+    last_error = None
+    for attempt in range(_request_retries + 1):
+        try:
+            return requests.request(method, _api_url(path), headers=_headers(), timeout=_request_timeout_seconds, **kwargs)
+        except requests.ConnectionError as e:
+            last_error = e
+            if attempt < _request_retries:
+                time.sleep(_request_retry_delay_seconds)
+        except requests.RequestException as e:
+            return {"status": "error", "tool": "vikunja", "message": f"Vikunja is unreachable: {e}"}
+    return {"status": "error", "tool": "vikunja", "message": f"Vikunja is unreachable: {last_error}"}
 
 def _patch_task(todo_id: int, changes: dict) -> requests.Response | dict:
     """Vikunja's task update replaces the whole task rather than merging: any field

@@ -14,16 +14,29 @@ from connectors.taskbook_connector import delete_task, read_tasks
 from connectors.routines_connector import read_routines
 from connectors.calendar_connector import calendar_today
 from connectors.vikunja_connector import (
+    check_todo_comments,
     check_todo_updates,
+    comments_enabled,
     daily_dateless_todos,
     daily_focus_todos,
+    get_todo,
+    mark_comments_seen,
     mark_date_nudge_sent,
+    mark_digest_sent,
     mark_focus_sent,
+    mark_stale_sweep_sent,
     mark_todos_done,
     mark_todos_seen,
+    retitle_enabled,
     subtasks_enabled,
+    undo_title_buttons,
     vikunja_enabled,
+    weekly_stale_todos,
+    weekly_wins,
 )
+from connectors.autopilot_connector import autopilot_enabled, fail_job, finish_job, next_job
+from connectors.approval_connector import expired_approvals
+from connectors.sprint_connector import due_sprints, mark_checked_in
 from connectors.usage_connector import buffering_active, usage_alert_message
 from connectors.buffer_connector import add_buffered, delete_buffered, due_buffered, read_buffered
 from agent import prompt
@@ -84,6 +97,9 @@ if __name__ == "__main__":
             "hood/calendar_oauth.json": '{"state": "", "refresh_token": "", "redirect_uri": ""}',  
             "hood/whitelist.json": '[]',
             "hood/buffer.json": '{"items": []}',
+            "hood/approvals.json": '{"approvals": []}',
+            "hood/autopilot.json": '{"queue": []}',
+            "hood/sprints.json": '{"sprints": []}',
             "hood/claude_code.json": '{"model": "", "effort": "", "notified_for_reset": 0}',
             "hood/notebook.md": "",
         }
@@ -167,20 +183,36 @@ if __name__ == "__main__":
                                     "If one is clearly a multi-step project, break it into 3 to 6 small subtasks with add_subtasks and mention you did, "
                                     "so its progress bar and Gantt view work; if the breakdown isn't obvious, don't guess, just acknowledge. "
                                 ) if subtasks_enabled() else ""
+                                # Triage rides along with the acknowledgement instead of costing a second call
+                                autopilot_hint = (
+                                    "If you could genuinely move one of these forward on your own, finding a phone number or address, checking opening "
+                                    "hours, comparing options or prices, gathering links, drafting a message, then call queue_task_work with its id and "
+                                    "exactly what you will find out, and say in a few words that you're on it. Only for research you can really do alone, "
+                                    "not for anything needing their body, wallet or personal choice. "
+                                ) if autopilot_enabled() else ""
+                                retitle_hint = (
+                                    "A title jotted down in a hurry is often a vague noun the user has to re-decide every time they see it. "
+                                    "Where that's the case, call improve_todo_title to rewrite it as the first concrete action, and name the new "
+                                    "wording in your reply. Leave the ones that are already clear actions exactly as they are. "
+                                ) if retitle_enabled() else ""
                                 response = deferred_prompt(
                                     "[system] The user just added these to-dos directly in Vikunja (not through you): "
                                     f"{json.dumps(new_todos)}. Acknowledge them in one or two friendly sentences, mentioning the titles. "
                                     "Capturing the thought was the win, so don't demand decisions. "
+                                    f"{retitle_hint}"
                                     f"{breakdown_hint}"
+                                    f"{autopilot_hint}"
                                     "Ask at most one short optional question, and only if something is clearly time-sensitive and missing a due date. "
-                                    "No guilt, no lectures, no other tools.",
+                                    "No guilt, no lectures, no tools beyond the ones named here.",
                                     "new to-dos",
                                 )
                                 if response.startswith("⚠️ Failed communicating"):
                                     print(f"⚠️ Vikunja watcher: LLM unavailable, will retry announcing new to-dos on the next check.")
                                 else:
                                     if response:
-                                        send_message(f"👀 {response}")
+                                        # The undo rides on the same message: a rewrite the user doesn't
+                                        # recognise has to be one tap from their own words coming back
+                                        send_message(f"👀 {response}", buttons=undo_title_buttons())
                                     mark_todos_seen([todo["id"] for todo in new_todos])
                             if completed_todos:
                                 response = deferred_prompt(
@@ -196,6 +228,34 @@ if __name__ == "__main__":
                                     if response:
                                         send_message(f"🎉 {response}")
                                     mark_todos_done([todo["id"] for todo in completed_todos])
+                        if comments_enabled():
+                            comment_updates = check_todo_comments()
+                            if comment_updates.get("status") != "success":
+                                print(f"⚠️ Vikunja comments: {comment_updates.get('message')}")
+                            for thread in comment_updates.get("threads", []):
+                                todo = thread["todo"]
+                                response = deferred_prompt(
+                                    "[system] The user just commented on one of their own to-dos in Vikunja. They are steering this task, "
+                                    "so treat the comment as an instruction about it and act on it, don't just acknowledge.\n\n"
+                                    f"To-do {todo['id']}: {todo['title']}\n"
+                                    f"Description: {todo['description'] or '(empty)'}\n"
+                                    f"The thread so far, oldest first: {json.dumps(thread['thread'])}\n"
+                                    f"What they just wrote: {json.dumps(thread['new_comments'])}\n\n"
+                                    "Do the thing they asked with the tools you have: change the due date, priority or title, write what you "
+                                    "know into the description, break it into steps, mark it done, or take the research on yourself. If it needs "
+                                    "digging you can genuinely do alone, queue it. If the next step is outward facing, like an email or a message "
+                                    "to someone, draft it with the right tool so it goes to them for approval, and never send it yourself.\n"
+                                    "Then always call reply_on_todo on this to-do to answer in the thread, saying plainly what you did or found, "
+                                    "so the conversation stays attached to the task. Finally reply here with at most two short sentences. "
+                                    "No preamble, no repeating their comment back at them.",
+                                    "to-do comment",
+                                )
+                                if response.startswith("⚠️ Failed communicating"):
+                                    print(f"⚠️ Vikunja comments: LLM unavailable, will retry to-do {todo['id']} on the next check.")
+                                else:
+                                    if response:
+                                        send_message(f"💬 {response}", buttons=undo_title_buttons())
+                                    mark_comments_seen(todo["id"], thread["seen"])
                     focus_todos = daily_focus_todos()
                     if isinstance(focus_todos, list):
                         if not focus_todos:
@@ -233,6 +293,50 @@ if __name__ == "__main__":
                                 if response:
                                     send_message(f"🗓️ {response}")
                                 mark_date_nudge_sent()
+                    # Templated rather than generated: when a timer goes off the point is
+                    # that it is instant, and an LLM round trip would make it arrive late
+                    for sprint in due_sprints():
+                        send_message(
+                            f"⏰ Time's up on **{sprint['title']}**. How did it go?",
+                            buttons=[
+                                [("✅ Done", f"/sprintdone {sprint['id']}"), ("➕ 10 min", f"/sprintmore {sprint['id']}")],
+                                [("😵 Stuck", f"/sprintstuck {sprint['id']}")],
+                            ],
+                        )
+                        mark_checked_in(sprint["id"])
+                    stale_todos = weekly_stale_todos()
+                    if isinstance(stale_todos, list):
+                        for todo in stale_todos:
+                            since = f" since {todo['updated'][:10]}" if todo["updated"] else ""
+                            send_message(
+                                f"🧹 This one's been sitting{since}: **{todo['title']}**\n"
+                                "No pressure either way, dropping it is a perfectly good answer.",
+                                buttons=[
+                                    [("🔪 Make it smaller", f"/shrink {todo['id']}"), ("📅 Next week", f"/snooze {todo['id']} 7")],
+                                    [("🗑️ Drop it", f"/deletetodo {todo['id']}")],
+                                ],
+                            )
+                        mark_stale_sweep_sent()
+                    wins = weekly_wins()
+                    if isinstance(wins, list):
+                        # Silence when there are no wins: a "you finished nothing" message
+                        # is exactly the kind of thing that makes someone stop opening the app
+                        if wins:
+                            response = deferred_prompt(
+                                "[system] Weekly wins. The user finished these to-dos in the last 7 days: "
+                                f"{json.dumps(wins)}. Tell them what they got done, warmly and specifically, naming a few. "
+                                "This is evidence against their own memory, which undercounts badly. Keep it short, "
+                                "no advice, no mention of anything still pending, no 'next week let's...'.",
+                                "weekly wins",
+                            )
+                            if response.startswith("⚠️ Failed communicating"):
+                                print("⚠️ Weekly wins: LLM unavailable, will retry on the next heartbeat.")
+                            else:
+                                if response:
+                                    send_message(f"🏆 {response}")
+                                mark_digest_sent()
+                        else:
+                            mark_digest_sent()
                     usage_alert = usage_alert_message()
                     if usage_alert:
                         send_message(f"🪫 {usage_alert} Queued so far: {len(read_buffered())} item(s).")
@@ -246,6 +350,45 @@ if __name__ == "__main__":
                         else:
                             send_message(f"🪫 {response}")
                             delete_buffered(item["id"])
+                    for approval in expired_approvals():
+                        send_message(
+                            f"⌛ The {approval['label']} I drafted for you expired without an answer, so I dropped it and nothing went out.\n\n"
+                            f"{approval['summary'].splitlines()[0]}"
+                        )
+                    # The queue is its own buffer, so above the usage threshold it simply
+                    # waits instead of being handed to the work buffer and running twice
+                    if autopilot_enabled() and not buffering_active():
+                        job = next_job()
+                        if job:
+                            todo = get_todo(job["todo_id"])
+                            if todo.get("status") != "success":
+                                if fail_job(job["id"]):
+                                    print(f"⚠️ Autopilot: gave up reading to-do {job['todo_id']}, dropped the job.")
+                                else:
+                                    print(f"⚠️ Autopilot: couldn't read to-do {job['todo_id']}, will retry.")
+                            else:
+                                todo = todo["todo"]
+                                response = prompt(
+                                    "[system] Autopilot. You took this to-do on yourself, now do the work.\n\n"
+                                    f"To-do {todo['id']}: {todo['title']}\n"
+                                    f"Current description: {todo['description'] or '(empty)'}\n"
+                                    f"What you said you would find out: {job['goal']}\n\n"
+                                    "Research it properly. Then call add_todo_context on this to-do with what you found, as short HTML, "
+                                    "leading with the single most useful fact and ending with the concrete next step. "
+                                    "If the next step is outward facing, like an email or a message to someone, draft it with the right tool "
+                                    "so it goes to the user for approval, and never send it yourself. "
+                                    "Then reply with at most two short sentences: what you found, and the one small thing they do next. "
+                                    "No preamble, no recap of what you searched."
+                                )
+                                if response.startswith("⚠️ Failed communicating"):
+                                    if fail_job(job["id"]):
+                                        print(f"⚠️ Autopilot: LLM unavailable 3 times for to-do {job['todo_id']}, dropped the job.")
+                                    else:
+                                        print("⚠️ Autopilot: LLM unavailable, will retry on the next heartbeat.")
+                                else:
+                                    if response:
+                                        send_message(f"🔎 {response}", buttons=undo_title_buttons())
+                                    finish_job(job["id"])
 
             except Exception as e:
                 try:

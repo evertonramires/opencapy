@@ -1,6 +1,8 @@
 from connectors.tools_connector import notify_tool_use
+from connectors.approval_connector import requires_approval
 from connectors.sms_connector import send_sms as connector_send_sms
 
+@requires_approval("SMS", lambda to, body: f"To: {to}\n\n{body[:600]}")
 def send_sms(to: str, body: str) -> dict:
     notify_tool_use(f"🔧📱➕ SMS tool used to send an SMS to {to}.")
     return connector_send_sms(to, body)

@@ -6,7 +6,13 @@ from connectors.vikunja_connector import (
     delete_todo as connector_delete_todo,
     update_todo as connector_update_todo,
     add_subtasks as connector_add_subtasks,
+    append_todo_description as connector_append_todo_description,
+    add_todo_comment as connector_add_todo_comment,
+    list_todo_comments as connector_list_todo_comments,
+    rename_todo as connector_rename_todo,
     list_todo_projects as connector_list_todo_projects,
+    comments_enabled,
+    retitle_enabled,
     subtasks_enabled,
 )
 
@@ -37,6 +43,22 @@ def add_subtasks(parent_todo_id: int, titles: list[str]) -> dict:
 def list_todo_projects() -> list[dict] | dict:
     notify_tool_use(f"🔧✅📁 Vikunja tool used to list to-do projects.")
     return connector_list_todo_projects()
+
+def add_todo_context(todo_id: int, notes: str) -> dict:
+    notify_tool_use(f"🔧✅🔎 Vikunja tool used to add research notes to to-do {todo_id}.")
+    return connector_append_todo_description(todo_id, notes)
+
+def reply_on_todo(todo_id: int, message: str) -> dict:
+    notify_tool_use(f"🔧✅💬 Vikunja tool used to reply on to-do {todo_id}.")
+    return connector_add_todo_comment(todo_id, message)
+
+def read_todo_comments(todo_id: int) -> dict:
+    notify_tool_use(f"🔧✅💬 Vikunja tool used to read the comments on to-do {todo_id}.")
+    return connector_list_todo_comments(todo_id)
+
+def improve_todo_title(todo_id: int, title: str) -> dict:
+    notify_tool_use(f"🔧✅✒️ Vikunja tool used to sharpen the title of to-do {todo_id}.")
+    return connector_rename_todo(todo_id, title)
 
 add_todo_tool = {
     "type": "function",
@@ -184,6 +206,101 @@ if subtasks_enabled():
                     },
                 },
                 "required": ["parent_todo_id", "titles"],
+            },
+        },
+    }
+
+add_todo_context_tool = {
+    "type": "function",
+    "function": {
+        "name": "add_todo_context",
+        "description": "Write research findings into a Vikunja to-do so the work is there when the user opens it: phone numbers, addresses, opening hours, prices, links, a drafted message. Everything the user wrote themselves is preserved, and re-running replaces your previous notes instead of duplicating them. Use short HTML (<p>, <ul><li>, <a href>, <b>) since Vikunja renders descriptions as HTML.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "todo_id": {
+                    "type": "integer",
+                    "description": "The id of the to-do to add context to.",
+                },
+                "notes": {
+                    "type": "string",
+                    "description": "The findings as short HTML. Lead with the single most useful fact, keep it scannable, and end with the concrete next step.",
+                },
+            },
+            "required": ["todo_id", "notes"],
+        },
+    },
+}
+
+if comments_enabled():
+    reply_on_todo_tool = {
+        "type": "function",
+        "function": {
+            "name": "reply_on_todo",
+            "description": "Post a reply in a Vikunja to-do's own comment thread. The user comments on their to-dos to steer them, and answering there keeps the whole conversation attached to the task instead of scrolling away in chat. Use this whenever you answer a comment, and whenever you change a task because of one, so the reason is recorded next to the task. Short HTML (<p>, <ul><li>, <a href>, <b>), a few sentences at most. Your replies are signed automatically.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "todo_id": {
+                        "type": "integer",
+                        "description": "The id of the to-do to comment on.",
+                    },
+                    "message": {
+                        "type": "string",
+                        "description": "The reply as short HTML. Answer the point that was raised and say plainly what you changed or found, no preamble.",
+                    },
+                },
+                "required": ["todo_id", "message"],
+            },
+        },
+    }
+
+    read_todo_comments_tool = {
+        "type": "function",
+        "function": {
+            "name": "read_todo_comments",
+            "description": "Read the comment thread on a Vikunja to-do, oldest first, with each comment marked as written by you or by the user. Use it to catch up on what has already been discussed about a task before acting on it.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "todo_id": {
+                        "type": "integer",
+                        "description": "The id of the to-do whose comments you want to read.",
+                    },
+                },
+                "required": ["todo_id"],
+            },
+        },
+    }
+
+if retitle_enabled():
+    improve_todo_title_tool = {
+        "type": "function",
+        "function": {
+            "name": "improve_todo_title",
+            "description": (
+                "Rewrite a Vikunja to-do's title so it is easier to actually start. A title captured in a hurry is often a vague noun "
+                "('dentist', 'etsy thing'), and a vague title is a task the user has to re-decide every time they look at the list. "
+                "Rewrite it as the first concrete action instead. Rules: open with a plain verb; name the very first physical step, not the "
+                "outcome; keep every specific the user gave you and invent nothing, no names, prices, places or times they didn't write; "
+                "eight words or fewer; sentence case; no emoji, no exclamation marks, no motivational adjectives; write in the same language "
+                "the user used. 'dentist' becomes 'Call the dentist to book a cleaning'; 'cancel the gym membership' is already an action, so "
+                "leave it alone. Skip titles that are already a clear action, and never use this to record progress or notes, that is what "
+                "add_todo_context and reply_on_todo are for. The original title is kept so the user can undo it."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "todo_id": {
+                        "type": "integer",
+                        "description": "The id of the to-do to rename.",
+                    },
+                    "title": {
+                        "type": "string",
+                        "description": "The rewritten title: one concrete action, eight words or fewer, in the user's own language and using only facts they gave.",
+                    },
+                },
+                "required": ["todo_id", "title"],
             },
         },
     }

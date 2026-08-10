@@ -347,13 +347,21 @@ def ensure_triage_labels() -> dict:
     return ids
 
 def set_todo_labels(todo_id: int, slugs: list[str]) -> dict:
-    """Replaces the task's whole label set in one call. Deliberately not _patch_task:
-    the bulk endpoint touches only labels, so unlike a whole-task write it cannot blank
-    the description or the due date on its way past."""
+    """Sets the task's triage labels in one call. Deliberately not _patch_task: the bulk
+    endpoint touches only labels, so unlike a whole-task write it cannot blank the
+    description or the due date on its way past. It does replace the whole label set
+    though, so anything the user labelled the task with themselves is read first and
+    carried over, otherwise triage would quietly strip it."""
     ids = ensure_triage_labels()
     if not ids:
         return {"status": "error", "tool": "vikunja", "message": "Could not read or create the triage labels in Vikunja."}
-    response = _request("post", f"/tasks/{todo_id}/labels/bulk", json={"labels": [{"id": ids[slug]} for slug in slugs if slug in ids]})
+    current = _request("get", f"/tasks/{todo_id}")
+    if isinstance(current, dict):
+        return current
+    if not current.ok:
+        return _request_error(current)
+    theirs = [{"id": label["id"]} for label in current.json().get("labels") or [] if label["id"] not in set(ids.values())]
+    response = _request("post", f"/tasks/{todo_id}/labels/bulk", json={"labels": theirs + [{"id": ids[slug]} for slug in slugs if slug in ids]})
     if isinstance(response, dict):
         return response
     if not response.ok:

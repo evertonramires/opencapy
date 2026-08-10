@@ -24,7 +24,7 @@ from connectors.vikunja_connector import (
     get_todo,
     restore_todo_title,
     retitle_enabled,
-    set_todo_labels,
+    set_todo_quadrant,
     todo_action_buttons,
     triage_enabled,
     undo_title_buttons,
@@ -511,6 +511,9 @@ def read_messages():
                     send_message(f"Sorry, I couldn't sort those, can we try again? Details: {e}")
             elif _is_command(message, "/quadrant"):
                 try:
+                    if not triage_enabled():
+                        send_message("Triage is off. Set ENABLE_TODO_TRIAGE=true to turn it on.")
+                        continue
                     parts = message[len("/quadrant"):].strip().split()
                     result = set_todo_quadrant(int(parts[0]), parts[1])
                     if result.get("status") != "success":

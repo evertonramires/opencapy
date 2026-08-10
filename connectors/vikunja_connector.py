@@ -321,12 +321,15 @@ def restore_todo_title(todo_id: int) -> dict:
     _write_state(state)
     return {"status": "success", "todo_id": todo_id, "title": old_title}
 
-def ensure_triage_labels() -> dict:
+def ensure_triage_labels(refresh: bool = False) -> dict:
     """Creates the triage labels once and caches slug -> id. The ids are what matters:
     Vikunja's task filters match labels by id and reject titles outright, so the board's
-    bucket filters can only be built after this has run. Returns {} if Vikunja said no."""
+    bucket filters can only be built after this has run. Returns {} if Vikunja said no.
+    Deleting a label in Vikunja leaves the cache pointing at an id that no longer exists,
+    so /triagesetup refreshes rather than trusting it — otherwise the obvious way to fix
+    a broken board would be the one thing that couldn't."""
     cached = _read_state().get("triage_label_ids") or {}
-    if set(cached) >= set(_triage_labels):
+    if not refresh and set(cached) >= set(_triage_labels):
         return cached
     response = _request("get", "/labels", params={"per_page": 50})
     if isinstance(response, dict) or not response.ok:
@@ -413,13 +416,16 @@ def _queue_drop_offer(todo_id: int, title: str) -> None:
     state["pending_drops"] = (state.get("pending_drops") or [])[-10:] + [{"id": todo_id, "title": title}]
     _write_state(state)
 
-def pop_pending_drops() -> list[dict]:
+def pop_pending_drops(limit: int = 3) -> list[dict]:
+    """Takes at most limit offers off the queue. A sweep over a backlog can propose more
+    drops than fit on one message, and the ones that don't fit wait for the next message
+    rather than being thrown away with the user none the wiser."""
     state = _read_state()
     drops = state.get("pending_drops") or []
     if drops:
-        state["pending_drops"] = []
+        state["pending_drops"] = drops[limit:]
         _write_state(state)
-    return drops
+    return drops[:limit]
 
 def todo_action_buttons() -> list[list[tuple[str, str]]] | None:
     """Every offer raised while composing the message being sent: undo a rename, drop
@@ -427,7 +433,7 @@ def todo_action_buttons() -> list[list[tuple[str, str]]] | None:
     one is a tap rather than a task the user has to remember to come back to."""
     drops = [
         [(f"🗑 Drop: {drop['title'][:22]}", f"/deletetodo {drop['id']}")]
-        for drop in pop_pending_drops()[-3:]
+        for drop in pop_pending_drops()
     ]
     return (undo_title_buttons() or []) + drops or None
 
@@ -437,7 +443,7 @@ def configure_triage_board() -> dict:
     the view in place rather than stacking a second copy of it."""
     if not triage_enabled():
         return {"status": "error", "tool": "vikunja", "message": "To-do triage is disabled. To enable it, set ENABLE_TODO_TRIAGE=true in your .env file."}
-    ids = ensure_triage_labels()
+    ids = ensure_triage_labels(refresh=True)
     if not ids:
         return {"status": "error", "tool": "vikunja", "message": "Could not read or create the triage labels in Vikunja."}
     project_id = _default_project_id()

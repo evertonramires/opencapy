@@ -179,16 +179,6 @@ Knowledge base (AppFlowy):
   - **Page content is append-only.** New blocks can be added to the end of a page, but existing blocks cannot be edited or removed. To revise a page the agent reads it, then appends a correction or replaces the page.
   - **Database rows cannot be deleted, and can only be changed by the agent if it created them.** Row updates go through an upsert keyed by the value the row was created with, so rows you add in the AppFlowy app are readable but not editable. Pages have no such limit — they can be renamed and trashed.
 
-Notes and docs (AFFiNE):
-
-- Configure in `.env`: set `ENABLE_AFFINE=true`, `AFFINE_API_HOST` (e.g. `https://affine.example.com`), `AFFINE_EMAIL` and `AFFINE_PASSWORD`.
-- AFFiNE 0.27 removed API tokens, so the agent signs in with your credentials and caches the session in `hood/affine_session.json`. Creating a dedicated AFFiNE account for the agent and inviting it to your workspace keeps it separate from your own login.
-- Optional: `AFFINE_WORKSPACE_ID` (defaults to the first workspace of the account).
-- There are no manual commands; the agent uses it through its tools: list docs, search docs, read a doc, create a doc, and append to a doc.
-- Docs are read and written as markdown — headings, bullets and quotes become real AFFiNE blocks rather than literal text.
-- Search is server side and full text, returning a highlighted snippet of the matching text, so the agent can find a note without reading everything.
-- **AFFiNE has no API for doc content.** Pages are CRDT documents synced over a websocket, so this connector speaks that protocol directly (`pycrdt` and `python-socketio`). It is version checked: if you upgrade AFFiNE and it starts refusing the sync channel, bump `AFFINE_CLIENT_VERSION` to match your server. Everything else here rides on the regular GraphQL API.
-
 Voice notes (Telegram):
 
 - Set `ENABLE_TRANSCRIPTION=true` in `.env` and talk to the bot by holding the mic button; forwarded audio files work the same way.

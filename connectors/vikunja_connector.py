@@ -14,6 +14,30 @@ _capy_notes_marker = "<h4>🔎 Capy notes</h4>"
 _capy_comment_header = "<p>🐹 <b>Capy</b></p>"
 _capy_comment_marker = "<!-- capy -->"
 _seen_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "hood", "vikunja_seen.json")
+# The triage vocabulary. Slugs are what the code and the model use, titles are what
+# the user sees in Vikunja. Exactly one quadrant label per task drives the board; the
+# rest are optional and answer a different question each.
+_quadrant_slugs = ["do", "schedule", "delegate", "drop"]
+_triage_labels = {
+    "do": ("🔥 do · urgent + important", "e74c3c"),
+    "schedule": ("📅 schedule · important, not urgent", "3498db"),
+    "delegate": ("👤 delegate · urgent, not important", "e67e22"),
+    "drop": ("🗑 drop · neither", "95a5a6"),
+    "not-needed": ("❓ does this need doing?", "9b59b6"),
+    "ai-can-do": ("🤖 an AI can do this", "1abc9c"),
+    "hire-out": ("🧑 hire this out", "16a085"),
+    "buy-instead": ("📦 buy this instead", "27ae60"),
+    "project": ("🧩 project · needs breaking down", "8e44ad"),
+    "two-minute": ("⚡ 2 minutes", "f1c40f"),
+    "low-energy": ("🔋 low energy", "7f8c8d"),
+    "deep-focus": ("🪫 deep focus", "34495e"),
+    "@computer": ("@computer", "2c3e50"),
+    "@home": ("@home", "2c3e50"),
+    "@errands": ("@errands", "2c3e50"),
+    "@calls": ("@calls", "2c3e50"),
+    "@waiting-for": ("@waiting-for", "2c3e50"),
+}
+_triage_board_title = "Eisenhower"
 _request_timeout_seconds = 15
 _request_retries = 1
 _request_retry_delay_seconds = 2
@@ -29,6 +53,9 @@ def comments_enabled() -> bool:
 
 def retitle_enabled() -> bool:
     return vikunja_enabled() and os.getenv("ENABLE_TODO_RETITLE", "false").lower() in ["true", "1", "yes"]
+
+def triage_enabled() -> bool:
+    return vikunja_enabled() and os.getenv("ENABLE_TODO_TRIAGE", "false").lower() in ["true", "1", "yes"]
 
 def _disabled_error() -> dict:
     return {"status": "error", "tool": "vikunja", "message": "Vikunja to-do tool is disabled. To enable it, set ENABLE_VIKUNJA=true and configure VIKUNJA_API_HOST and VIKUNJA_API_TOKEN in your .env file."}
@@ -103,6 +130,9 @@ def _simplify_todo(task: dict) -> dict:
         "done_at": task.get("done_at") or "",
         "is_subtask": bool(related.get("parenttask")),
         "subtasks": [{"id": s.get("id"), "title": s.get("title"), "done": s.get("done", False)} for s in subtasks],
+        # This projection is the whitelist of what ever reaches the model, so without
+        # labels here it would re-triage tasks it has already classified
+        "labels": [label.get("title") for label in task.get("labels") or []],
     }
 
 def add_todo(title: str, due_date: str = "", description: str = "", priority: int = 0, project_id: int = 0) -> dict:
@@ -290,6 +320,147 @@ def restore_todo_title(todo_id: int) -> dict:
     state["original_titles"] = originals
     _write_state(state)
     return {"status": "success", "todo_id": todo_id, "title": old_title}
+
+def ensure_triage_labels() -> dict:
+    """Creates the triage labels once and caches slug -> id. The ids are what matters:
+    Vikunja's task filters match labels by id and reject titles outright, so the board's
+    bucket filters can only be built after this has run. Returns {} if Vikunja said no."""
+    cached = _read_state().get("triage_label_ids") or {}
+    if set(cached) >= set(_triage_labels):
+        return cached
+    response = _request("get", "/labels", params={"per_page": 50})
+    if isinstance(response, dict) or not response.ok:
+        return {}
+    existing = {label["title"]: label["id"] for label in response.json() or []}
+    ids = {}
+    for slug, (title, color) in _triage_labels.items():
+        if title in existing:
+            ids[slug] = existing[title]
+            continue
+        created = _request("put", "/labels", json={"title": title, "hex_color": color})
+        if isinstance(created, dict) or not created.ok:
+            return {}
+        ids[slug] = created.json()["id"]
+    state = _read_state()
+    state["triage_label_ids"] = ids
+    _write_state(state)
+    return ids
+
+def set_todo_labels(todo_id: int, slugs: list[str]) -> dict:
+    """Replaces the task's whole label set in one call. Deliberately not _patch_task:
+    the bulk endpoint touches only labels, so unlike a whole-task write it cannot blank
+    the description or the due date on its way past."""
+    ids = ensure_triage_labels()
+    if not ids:
+        return {"status": "error", "tool": "vikunja", "message": "Could not read or create the triage labels in Vikunja."}
+    response = _request("post", f"/tasks/{todo_id}/labels/bulk", json={"labels": [{"id": ids[slug]} for slug in slugs if slug in ids]})
+    if isinstance(response, dict):
+        return response
+    if not response.ok:
+        return _request_error(response)
+    return {"status": "success", "todo_id": todo_id, "labels": [_triage_labels[slug][0] for slug in slugs if slug in ids]}
+
+def triage_todo(todo_id: int, quadrant: str, extra_labels: list[str] = [], reason: str = "") -> dict:
+    """Files a to-do into one of the four boxes and tags what else is true about it.
+    The quadrant is a single value rather than something counted out of a list, so a
+    task can never end up in two columns at once."""
+    if not triage_enabled():
+        return {"status": "error", "tool": "vikunja", "message": "To-do triage is disabled. To enable it, set ENABLE_TODO_TRIAGE=true in your .env file."}
+    if quadrant not in _quadrant_slugs:
+        return {"status": "error", "tool": "vikunja", "message": f"Unknown quadrant '{quadrant}', pick one of {_quadrant_slugs}."}
+    extras = [slug for slug in extra_labels if slug in _triage_labels and slug not in _quadrant_slugs]
+    saved = set_todo_labels(todo_id, [quadrant] + extras)
+    if saved.get("status") != "success":
+        return saved
+    # A drop is only ever offered, never carried out, so it has to leave something the
+    # user can act on. The reasoning goes in a comment rather than the description: the
+    # Capy block there belongs to research notes, which would overwrite it the moment
+    # autopilot finishes a job on the same task.
+    if quadrant == "drop" or "not-needed" in extras:
+        if reason:
+            add_todo_comment(todo_id, f"<p>{reason}</p>")
+        current = get_todo(todo_id)
+        if current.get("status") == "success":
+            _queue_drop_offer(todo_id, current["todo"]["title"])
+    return {"status": "success", "todo_id": todo_id, "quadrant": _triage_labels[quadrant][0], "labels": saved["labels"]}
+
+def set_todo_quadrant(todo_id: int, quadrant: str) -> dict:
+    """Moves a to-do to another box by hand, keeping everything else triage decided
+    about it. The board's buckets are filters, so a card cannot be dragged between
+    columns and this is how the user overrules a verdict."""
+    if quadrant not in _quadrant_slugs:
+        return {"status": "error", "tool": "vikunja", "message": f"Unknown quadrant '{quadrant}', pick one of {_quadrant_slugs}."}
+    current = get_todo(todo_id)
+    if current.get("status") != "success":
+        return current
+    titles = set(current["todo"]["labels"])
+    extras = [slug for slug, (title, _) in _triage_labels.items() if title in titles and slug not in _quadrant_slugs]
+    saved = set_todo_labels(todo_id, [quadrant] + extras)
+    if saved.get("status") != "success":
+        return saved
+    return {"status": "success", "todo_id": todo_id, "title": current["todo"]["title"], "quadrant": _triage_labels[quadrant][0]}
+
+def _queue_drop_offer(todo_id: int, title: str) -> None:
+    state = _read_state()
+    state["pending_drops"] = (state.get("pending_drops") or [])[-10:] + [{"id": todo_id, "title": title}]
+    _write_state(state)
+
+def pop_pending_drops() -> list[dict]:
+    state = _read_state()
+    drops = state.get("pending_drops") or []
+    if drops:
+        state["pending_drops"] = []
+        _write_state(state)
+    return drops
+
+def todo_action_buttons() -> list[list[tuple[str, str]]] | None:
+    """Every offer raised while composing the message being sent: undo a rename, drop
+    something triage doubts. They ride on the message that announced them, so acting on
+    one is a tap rather than a task the user has to remember to come back to."""
+    drops = [
+        [(f"🗑 Drop: {drop['title'][:22]}", f"/deletetodo {drop['id']}")]
+        for drop in pop_pending_drops()[-3:]
+    ]
+    return (undo_title_buttons() or []) + drops or None
+
+def configure_triage_board() -> dict:
+    """Adds the four boxes to Vikunja as a filter-driven kanban view. The buckets are
+    built from label ids, so this has to run after the labels exist. Re-running updates
+    the view in place rather than stacking a second copy of it."""
+    if not triage_enabled():
+        return {"status": "error", "tool": "vikunja", "message": "To-do triage is disabled. To enable it, set ENABLE_TODO_TRIAGE=true in your .env file."}
+    ids = ensure_triage_labels()
+    if not ids:
+        return {"status": "error", "tool": "vikunja", "message": "Could not read or create the triage labels in Vikunja."}
+    project_id = _default_project_id()
+    response = _request("get", f"/projects/{project_id}/views")
+    if isinstance(response, dict):
+        return response
+    if not response.ok:
+        return _request_error(response)
+    # An unlabelled task matches "not in", which is what gives the board somewhere
+    # honest to show whatever has not been triaged yet instead of hiding it
+    buckets = [{"title": "📥 untriaged", "filter": {"filter": f"labels not in {','.join(str(ids[slug]) for slug in _quadrant_slugs)} && done = false"}}]
+    buckets += [{"title": _triage_labels[slug][0], "filter": {"filter": f"labels in {ids[slug]} && done = false"}} for slug in _quadrant_slugs]
+    payload = {"title": _triage_board_title, "view_kind": "kanban", "bucket_configuration_mode": "filter", "bucket_configuration": buckets}
+    existing = next((view for view in response.json() or [] if view.get("title") == _triage_board_title), None)
+    if existing:
+        saved = _request("post", f"/projects/{project_id}/views/{existing['id']}", json={**existing, **payload})
+    else:
+        saved = _request("put", f"/projects/{project_id}/views", json=payload)
+    if isinstance(saved, dict):
+        return saved
+    if not saved.ok:
+        return _request_error(saved)
+    return {"status": "success", "project_id": project_id, "view": _triage_board_title, "labels": len(ids), "buckets": [bucket["title"] for bucket in buckets]}
+
+def untriaged_todos() -> list[dict] | dict:
+    """Open to-dos carrying no quadrant label yet, for the backfill sweep."""
+    todos = list_todos()
+    if isinstance(todos, dict):
+        return todos
+    quadrant_titles = {_triage_labels[slug][0] for slug in _quadrant_slugs}
+    return [todo for todo in todos if not quadrant_titles & set(todo["labels"])]
 
 def add_subtasks(parent_todo_id: int, titles: list[str]) -> dict:
     """Creates the subtasks in the parent's project, prefixing each title with
@@ -618,6 +789,33 @@ def mark_digest_sent() -> None:
     now = datetime.now(timezone.utc)
     state = _read_state()
     state["last_digest_week"] = f"{now.isocalendar().year}-W{now.isocalendar().week}"
+    _write_state(state)
+
+def weekly_quadrant_balance() -> dict | bool:
+    """How the open list is split across the four boxes, against last week's split.
+    Covey's argument in First Things First is that a healthy system grows quadrant II
+    and shrinks quadrant III, so the movement is the point, not the raw counts. Caller
+    must mark_balance_sent after sending."""
+    if not triage_enabled() or not _weekly_slot("last_balance_week"):
+        return False
+    todos = list_todos()
+    if isinstance(todos, dict):
+        return False
+    counts = {slug: 0 for slug in _quadrant_slugs}
+    untriaged = 0
+    for todo in todos:
+        quadrant = next((slug for slug in _quadrant_slugs if _triage_labels[slug][0] in todo["labels"]), "")
+        if quadrant:
+            counts[quadrant] += 1
+        else:
+            untriaged += 1
+    return {"counts": counts, "untriaged": untriaged, "last_week": _read_state().get("last_balance_counts") or {}}
+
+def mark_balance_sent(counts: dict) -> None:
+    now = datetime.now(timezone.utc)
+    state = _read_state()
+    state["last_balance_week"] = f"{now.isocalendar().year}-W{now.isocalendar().week}"
+    state["last_balance_counts"] = counts
     _write_state(state)
 
 def list_todo_projects() -> list[dict] | dict:

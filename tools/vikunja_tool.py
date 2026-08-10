@@ -11,9 +11,11 @@ from connectors.vikunja_connector import (
     list_todo_comments as connector_list_todo_comments,
     rename_todo as connector_rename_todo,
     list_todo_projects as connector_list_todo_projects,
+    triage_todo as connector_triage_todo,
     comments_enabled,
     retitle_enabled,
     subtasks_enabled,
+    triage_enabled,
 )
 
 def add_todo(title: str, due_date: str = "", description: str = "", priority: int = 0, project_id: int = 0) -> dict:
@@ -59,6 +61,10 @@ def read_todo_comments(todo_id: int) -> dict:
 def improve_todo_title(todo_id: int, title: str) -> dict:
     notify_tool_use(f"🔧✅✒️ Vikunja tool used to sharpen the title of to-do {todo_id}.")
     return connector_rename_todo(todo_id, title)
+
+def triage_todo(todo_id: int, quadrant: str, extra_labels: list[str] = [], reason: str = "") -> dict:
+    notify_tool_use(f"🔧✅🧭 Vikunja tool used to triage to-do {todo_id} as '{quadrant}'.")
+    return connector_triage_todo(todo_id, quadrant, extra_labels, reason)
 
 add_todo_tool = {
     "type": "function",
@@ -301,6 +307,73 @@ if retitle_enabled():
                     },
                 },
                 "required": ["todo_id", "title"],
+            },
+        },
+    }
+
+if triage_enabled():
+    triage_todo_tool = {
+        "type": "function",
+        "function": {
+            "name": "triage_todo",
+            "description": (
+                "File a Vikunja to-do into the user's four boxes and tag what else is true about it. Run this on every to-do that has no "
+                "quadrant label yet. Two independent axes decide the box. IMPORTANT means it moves something the user actually cares about "
+                "forward, or there are real consequences if it never happens; a task can be loud and still not be important. URGENT means "
+                "there is time pressure on it right now, a deadline, an appointment, something that expires or blocks someone else; a task "
+                "can matter enormously and not be urgent at all, and those are the ones that quietly never get done.\n"
+                "Then ask three questions in this order, because the order is the whole point: does this really need to be done at all, "
+                "before anything else, since there is no sense automating or delegating something that should simply not exist; if it must "
+                "happen, can someone or something else do it, an AI, a person the user could hire, or a product they could just buy; and only "
+                "then, does it have to happen now.\n"
+                "Answer the first with 'not-needed' when you genuinely doubt it needs doing, the second with 'ai-can-do', 'hire-out' or "
+                "'buy-instead', and the third by setting a due date with update_todo rather than a label. If it would take under two minutes, "
+                "label it 'two-minute' and don't route it to anyone, doing it is cheaper than delegating it.\n"
+                "Add extra labels only when clearly true, never more than three, and never guess a context or an energy level you have no "
+                "evidence for. 'drop' and 'not-needed' are proposals, not decisions: they raise a button for the user and you must never "
+                "delete anything yourself, never lecture about the task, and never imply they were wrong to have written it down."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "todo_id": {
+                        "type": "integer",
+                        "description": "The id of the to-do to triage.",
+                    },
+                    "quadrant": {
+                        "type": "string",
+                        "enum": ["do", "schedule", "delegate", "drop"],
+                        "description": (
+                            "Which box it belongs in. 'do' is urgent and important, handle it personally and soon. 'schedule' is important "
+                            "but not urgent, the quadrant worth protecting, so give it a date. 'delegate' is urgent but not important, it "
+                            "wants to come off the user's plate. 'drop' is neither and is only ever a suggestion."
+                        ),
+                    },
+                    "extra_labels": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "enum": [
+                                "not-needed", "ai-can-do", "hire-out", "buy-instead", "project", "two-minute",
+                                "low-energy", "deep-focus", "@computer", "@home", "@errands", "@calls", "@waiting-for",
+                            ],
+                        },
+                        "description": (
+                            "At most three, and only what is clearly true. 'project' means it needs more than one step, so follow it with "
+                            "add_subtasks. 'two-minute' means it is faster to just do than to plan. 'low-energy' is doable while depleted, "
+                            "'deep-focus' needs a good head. The @ labels are where or with what it can be done, and '@waiting-for' is for "
+                            "anything now sitting with someone else."
+                        ),
+                    },
+                    "reason": {
+                        "type": "string",
+                        "description": (
+                            "One short sentence on why, in the user's own language. Saved on the task only when you propose dropping it, "
+                            "since that is the verdict they will want to question later."
+                        ),
+                    },
+                },
+                "required": ["todo_id", "quadrant"],
             },
         },
     }

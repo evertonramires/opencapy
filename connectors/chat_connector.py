@@ -17,13 +17,18 @@ from connectors.calendar_connector import (
 )
 from connectors.vikunja_connector import (
     add_todo,
+    configure_triage_board,
     list_todos,
     complete_todo,
     delete_todo,
     get_todo,
     restore_todo_title,
     retitle_enabled,
+    set_todo_quadrant,
+    todo_action_buttons,
+    triage_enabled,
     undo_title_buttons,
+    untriaged_todos,
     update_todo,
 )
 from connectors.autopilot_connector import autopilot_enabled, read_queue, remaining_today
@@ -457,6 +462,66 @@ def read_messages():
                     send_message(f"✒️ {response}", buttons=undo_title_buttons())
                 except Exception as e:
                     send_message(f"Usage: /retitle <todo_id>. Details: {e}")
+            elif _is_command(message, "/triagesetup"):
+                try:
+                    result = configure_triage_board()
+                    if result.get("status") != "success":
+                        send_message(f"Sorry, I couldn't set the board up. {result.get('message')}")
+                        continue
+                    send_message(f"🧭 Your four boxes are live in Vikunja as the **{result['view']}** board: " + " · ".join(result["buckets"]))
+                except Exception as e:
+                    send_message(f"Sorry, I couldn't set the board up, can we try again? Details: {e}")
+            elif _is_command(message, "/triage"):
+                try:
+                    if not triage_enabled():
+                        send_message("Triage is off. Set ENABLE_TODO_TRIAGE=true to turn it on.")
+                        continue
+                    todo_id = int(message[len("/triage"):].strip())
+                    found = get_todo(todo_id)
+                    if found.get("status") != "success":
+                        send_message(f"Sorry, I couldn't find that to-do. {found.get('message')}")
+                        continue
+                    response = prompt(
+                        f"[system] The user wants this to-do sorted into their four boxes: {json.dumps(found['todo'])}. "
+                        "Call triage_todo on it, then tell them the box in one short sentence and why in a few words. "
+                        "If it already has a box, re-decide it honestly rather than agreeing with the old verdict."
+                    )
+                    send_message(f"🧭 {response}", buttons=todo_action_buttons())
+                except Exception as e:
+                    send_message(f"Usage: /triage <todo_id>. Details: {e}")
+            elif _is_command(message, "/triageall"):
+                try:
+                    if not triage_enabled():
+                        send_message("Triage is off. Set ENABLE_TODO_TRIAGE=true to turn it on.")
+                        continue
+                    pending = untriaged_todos()
+                    if isinstance(pending, dict):
+                        send_message(f"Sorry, I couldn't read your to-dos. {pending.get('message')}")
+                        continue
+                    if not pending:
+                        send_message("🧭 Everything's already sorted into a box, nothing waiting.")
+                        continue
+                    response = prompt(
+                        f"[system] The user asked you to sort their unsorted to-dos into the four boxes: {json.dumps(pending)}. "
+                        "Call triage_todo once for each. Then give them the shape of it in two or three sentences, how many landed in "
+                        "each box and anything that stood out, not a list of every task. No lecture, no advice about the pile."
+                    )
+                    send_message(f"🧭 {response}", buttons=todo_action_buttons())
+                except Exception as e:
+                    send_message(f"Sorry, I couldn't sort those, can we try again? Details: {e}")
+            elif _is_command(message, "/quadrant"):
+                try:
+                    if not triage_enabled():
+                        send_message("Triage is off. Set ENABLE_TODO_TRIAGE=true to turn it on.")
+                        continue
+                    parts = message[len("/quadrant"):].strip().split()
+                    result = set_todo_quadrant(int(parts[0]), parts[1])
+                    if result.get("status") != "success":
+                        send_message(f"Sorry, I couldn't move that one. {result.get('message')}")
+                        continue
+                    send_message(f"🧭 **{result['title']}** is now in {result['quadrant']}.")
+                except Exception as e:
+                    send_message(f"Usage: /quadrant <todo_id> <do|schedule|delegate|drop>. Details: {e}")
             elif _is_command(message, "/snooze"):
                 try:
                     parts = message[len("/snooze"):].strip().split()
@@ -713,4 +778,4 @@ def read_messages():
                     _rework_approval(tweak, message)
                     continue
                 response = prompt(f"User said: {message}")
-                send_message(response, buttons=undo_title_buttons())
+                send_message(response, buttons=todo_action_buttons())

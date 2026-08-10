@@ -20,6 +20,7 @@ from connectors.vikunja_connector import (
     daily_dateless_todos,
     daily_focus_todos,
     get_todo,
+    mark_balance_sent,
     mark_comments_seen,
     mark_date_nudge_sent,
     mark_digest_sent,
@@ -29,8 +30,10 @@ from connectors.vikunja_connector import (
     mark_todos_seen,
     retitle_enabled,
     subtasks_enabled,
-    undo_title_buttons,
+    todo_action_buttons,
+    triage_enabled,
     vikunja_enabled,
+    weekly_quadrant_balance,
     weekly_stale_todos,
     weekly_wins,
 )
@@ -195,11 +198,19 @@ if __name__ == "__main__":
                                     "Where that's the case, call improve_todo_title to rewrite it as the first concrete action, and name the new "
                                     "wording in your reply. Leave the ones that are already clear actions exactly as they are. "
                                 ) if retitle_enabled() else ""
+                                triage_hint = (
+                                    "Call triage_todo once for each of these to file it into the user's four boxes. Mention the box in a few words, "
+                                    "as a note not a verdict, and never explain the whole method back to them. If it comes out as 'ai-can-do' and you "
+                                    "could genuinely do it alone, queue it with queue_task_work in the same breath. If it comes out 'drop' or "
+                                    "'not-needed', say so gently and leave it entirely up to them, a button will be offered and you must not delete "
+                                    "anything yourself. If it comes out 'two-minute', say it's probably faster to just do than to plan. "
+                                ) if triage_enabled() else ""
                                 response = deferred_prompt(
                                     "[system] The user just added these to-dos directly in Vikunja (not through you): "
                                     f"{json.dumps(new_todos)}. Acknowledge them in one or two friendly sentences, mentioning the titles. "
                                     "Capturing the thought was the win, so don't demand decisions. "
                                     f"{retitle_hint}"
+                                    f"{triage_hint}"
                                     f"{breakdown_hint}"
                                     f"{autopilot_hint}"
                                     "Ask at most one short optional question, and only if something is clearly time-sensitive and missing a due date. "
@@ -212,7 +223,7 @@ if __name__ == "__main__":
                                     if response:
                                         # The undo rides on the same message: a rewrite the user doesn't
                                         # recognise has to be one tap from their own words coming back
-                                        send_message(f"👀 {response}", buttons=undo_title_buttons())
+                                        send_message(f"👀 {response}", buttons=todo_action_buttons())
                                     mark_todos_seen([todo["id"] for todo in new_todos])
                             if completed_todos:
                                 response = deferred_prompt(
@@ -254,7 +265,7 @@ if __name__ == "__main__":
                                         print(f"⚠️ Vikunja comments: LLM unavailable, will retry to-do {todo['id']} on the next check.")
                                     else:
                                         if response:
-                                            send_message(f"💬 {response}", buttons=undo_title_buttons())
+                                            send_message(f"💬 {response}", buttons=todo_action_buttons())
                                         mark_comments_seen(todo["id"], thread["seen"])
                     focus_todos = daily_focus_todos()
                     if isinstance(focus_todos, list):
@@ -263,9 +274,12 @@ if __name__ == "__main__":
                         else:
                             response = deferred_prompt(
                                 "[system] Morning focus time. These are the user's pending to-dos: "
-                                f"{json.dumps(focus_todos)}. Keep this light: pick at most 3 that matter most today "
-                                "(due or overdue first), then suggest exactly one to start with, with a first step so small it takes two minutes. "
-                                "Be brief, warm and encouraging. Never mention how many tasks are pending in total, never guilt about overdue ones.",
+                                f"{json.dumps(focus_todos)}. Pick at most 6 for today and list them in the order they should be done, hardest "
+                                "first, so the one they'd most like to avoid is at the top and everything after it feels easier. Prefer the "
+                                "ones due or overdue, then the ones labelled as urgent and important, then the important but not urgent ones, "
+                                "which are the easiest to keep postponing forever. Then suggest exactly one to start with, with a first step so "
+                                "small it takes two minutes. Be brief, warm and encouraging. Never mention how many tasks are pending in total, "
+                                "never guilt about overdue ones, and don't explain why you ordered them that way.",
                                 "daily focus",
                             )
                             if response.startswith("⚠️ Failed communicating"):
@@ -337,6 +351,23 @@ if __name__ == "__main__":
                                 mark_digest_sent()
                         else:
                             mark_digest_sent()
+                    balance = weekly_quadrant_balance()
+                    if isinstance(balance, dict):
+                        response = deferred_prompt(
+                            "[system] Weekly balance check on the user's four boxes. Open to-dos per box right now: "
+                            f"{json.dumps(balance['counts'])}, plus {balance['untriaged']} not yet sorted. Last week's numbers were "
+                            f"{json.dumps(balance['last_week'])}. The thing worth noticing is the direction of travel, not the totals: "
+                            "'schedule' (important but not urgent) growing is the healthy sign, and a big 'do' pile means they're living in "
+                            "firefights. Two or three sentences, curious rather than scored, no advice unless one number really stands out. "
+                            "Never call it a report and never suggest they triage more.",
+                            "weekly balance",
+                        )
+                        if response.startswith("⚠️ Failed communicating"):
+                            print("⚠️ Weekly balance: LLM unavailable, will retry on the next heartbeat.")
+                        else:
+                            if response:
+                                send_message(f"🧭 {response}")
+                            mark_balance_sent(balance["counts"])
                     usage_alert = usage_alert_message()
                     if usage_alert:
                         send_message(f"🪫 {usage_alert} Queued so far: {len(read_buffered())} item(s).")
@@ -387,7 +418,7 @@ if __name__ == "__main__":
                                         print("⚠️ Autopilot: LLM unavailable, will retry on the next heartbeat.")
                                 else:
                                     if response:
-                                        send_message(f"🔎 {response}", buttons=undo_title_buttons())
+                                        send_message(f"🔎 {response}", buttons=todo_action_buttons())
                                     finish_job(job["id"])
 
             except Exception as e:

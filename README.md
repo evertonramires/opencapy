@@ -150,13 +150,14 @@ Notes:
 To-dos (Vikunja):
 
 - Configure in `.env`: set `ENABLE_VIKUNJA=true`, `VIKUNJA_API_HOST` (e.g. `https://try.vikunja.io` or your self-hosted instance) and `VIKUNJA_API_TOKEN`.
-- Create the API token in Vikunja under Settings > API Tokens, with permissions for tasks and projects.
+- Create the API token in Vikunja under Settings > API Tokens, with permissions for tasks and projects — add labels and project views too if you want `ENABLE_TODO_TRIAGE`.
 - Optional: `VIKUNJA_DEFAULT_PROJECT_ID` sets the project new to-dos go to (defaults to 1, usually the Inbox).
 - Besides the manual commands below, the agent can manage to-dos on its own through the vikunja tool (add, list, complete, delete, and pick a project).
 - The agent also watches Vikunja for to-dos you add outside the bot (web/mobile app) and briefly acknowledges them, and cheers you on when you complete a to-do — wherever you tick it off. `VIKUNJA_WATCH_INTERVAL_SECONDS` controls how often it checks (defaults to 30). The first check after enabling silently marks existing to-dos as known, so only to-dos added afterwards are announced (tracked in `hood/vikunja_seen.json`).
 - The to-do features are designed to be ADHD-friendly: capturing is instant (no interrogation about details), and starting is helped by `/focus`, which picks exactly one to-do and suggests a first step small enough to take two minutes, offering a check-in afterwards.
 - Optional: `VIKUNJA_DAILY_FOCUS_HOUR` (24h UTC hour, -1 disables) sends one gentle morning message with up to 3 to-dos that matter today and a suggested starter — never the whole list.
 - Optional: `VIKUNJA_DATE_NUDGE_HOUR` (24h UTC hour, -1 disables) sends one daily message listing to-dos without a due date; reply with rough dates ("friday", "next week") and the agent sets them, keeping Vikunja's Gantt timeline useful.
+- Optional: with `ENABLE_TODO_TRIAGE=true` every incoming to-do is sorted into the four urgent/important boxes and labelled with what else is true about it; run `/triagesetup` once to create the labels and a self-populating kanban board in Vikunja. A weekly message reports how the boxes are shifting, on the same `WEEKLY_REVIEW_DAY` schedule as the stale sweep.
 - Optional: with `ENABLE_VIKUNJA_SUBTASKS=true` the agent breaks multi-step to-dos into subtasks (on its own or when asked), naming each one after the original to-do and step number (e.g. `[ change car tyres - 1 ] lift car`) so steps stay recognizable in the list. The parent's progress bar is kept in sync as subtasks get done — including ones you tick off directly in the Vikunja app.
 
 ```code
@@ -277,6 +278,26 @@ The acknowledgement carries an **Undo** button, and your original is kept either
 /retitle 12 - rewrite to-do 12's title as a clear first action
 /undotitle 12 - put your own title back
 ```
+
+Triage (`ENABLE_TODO_TRIAGE=true`):
+
+Every to-do that arrives gets sorted into the four urgent/important boxes and tagged
+with what else is true about it — whether an AI, someone you could hire or a product
+could take it off you, whether it's really a project in disguise, whether it's a
+two-minute job, and what it needs from you to get done. Run `/triagesetup` once and
+the boxes show up in Vikunja as a kanban board whose columns fill themselves from the
+labels, with an **untriaged** column so nothing hides. A "drop" verdict is only ever
+offered as a button; Capy never deletes anything on its own.
+
+```code
+/triagesetup - create the labels and the Eisenhower board in Vikunja
+/triage 12 - sort to-do 12 into a box
+/triageall - sort everything not yet sorted
+/quadrant 12 schedule - move to-do 12 to another box by hand
+```
+
+The board's columns are filters, so cards move when their labels change rather than by
+being dragged — `/quadrant` is how you overrule a verdict.
 
 When a sprint's time is up you get a message with **Done / +10 min / Stuck** buttons,
 so answering is one tap.

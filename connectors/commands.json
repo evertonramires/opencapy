@@ -185,6 +185,22 @@
             "description": "Put a to-do's original title back. Example: /undotitle 12"
         },
         {
+            "command": "triage",
+            "description": "Sort one to-do into your four boxes. Example: /triage 12"
+        },
+        {
+            "command": "triageall",
+            "description": "Sort every unsorted to-do into your four boxes"
+        },
+        {
+            "command": "quadrant",
+            "description": "Move a to-do to another box. Example: /quadrant 12 schedule"
+        },
+        {
+            "command": "triagesetup",
+            "description": "Create the triage labels and the Eisenhower board in Vikunja"
+        },
+        {
             "command": "approve",
             "description": "Approve a drafted email or SMS and send it. Example: /approve 1"
         },

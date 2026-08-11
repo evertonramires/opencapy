@@ -7,7 +7,9 @@ from datetime import datetime, timezone
 
 _no_due_date = "0001-01-01T00:00:00Z"
 _capy_notes_marker = "<h4>🔎 Capy notes</h4>"
+# Only kept to strip it off to-dos split before the steps went bare, never written
 _capy_steps_marker = "<h4>✅ Steps</h4>"
+_task_list_pattern = r'<ul data-type="taskList">.*?</ul>'
 # Comments Capy writes come back from the API authored by the user's own account,
 # since that is whose token it holds. Without a marker of its own the watcher would
 # read its own replies as new instructions and talk to itself forever. The header is
@@ -232,11 +234,17 @@ def _checklist_item(text: str, done: bool) -> str:
 def _read_steps(description: str) -> list[dict]:
     """The steps as they currently stand, ticked or not. Vikunja stores the checklist
     as TipTap markup in the description and updates data-checked in place when a box is
-    tapped, so the description is the only record of progress there is."""
-    block = description.partition(_capy_steps_marker)[2].partition(_capy_notes_marker)[0]
+    tapped, so the description is the only record of progress there is.
+
+    The checklist element is its own anchor, with no heading marking it out: a heading
+    would be one more thing to read on a task whose steps already say what they are.
+    Anchoring on the markup rather than on a comment is what makes that safe, since the
+    editor reserialises the whole description every time a box is tapped and would drop
+    a comment on the way through."""
+    block = re.search(_task_list_pattern, description.partition(_capy_notes_marker)[0], re.DOTALL)
     return [
         {"text": re.sub(r"<[^>]+>", "", item.partition("<div>")[2]).strip(), "done": 'data-checked="true"' in item}
-        for item in re.findall(r"<li[^>]*data-type=\"taskItem\".*?</li>", block, re.DOTALL)
+        for item in re.findall(r"<li[^>]*data-type=\"taskItem\".*?</li>", block.group(0) if block else "", re.DOTALL)
     ]
 
 def _write_steps_block(description: str, titles: list[str]) -> str:
@@ -244,12 +252,14 @@ def _write_steps_block(description: str, titles: list[str]) -> str:
     research notes, so the three can be rewritten independently and adding steps never
     eats an autopilot finding, or the other way round."""
     head, notes_marker, notes = description.partition(_capy_notes_marker)
-    user_text = head.partition(_capy_steps_marker)[0].rstrip()
     # A step that survives a rewrite keeps its tick, so refining the breakdown never
     # quietly undoes work the user already did
     ticked = {step["text"]: step["done"] for step in _read_steps(description)}
+    # The old heading is stripped alongside the old list, so tasks split before the
+    # steps went bare lose it the next time they are rewritten
+    user_text = re.sub(_task_list_pattern, "", head, flags=re.DOTALL).replace(_capy_steps_marker, "").strip()
     checklist = "".join(_checklist_item(title, ticked.get(title, False)) for title in titles)
-    steps = f'{_capy_steps_marker}\n<ul data-type="taskList">{checklist}</ul>'
+    steps = f'<ul data-type="taskList">{checklist}</ul>'
     return "\n".join(part for part in [user_text, steps, notes_marker + notes if notes_marker else ""] if part)
 
 def _is_capy_comment(comment: str) -> bool:

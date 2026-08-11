@@ -1,11 +1,13 @@
 import json
 import os
+import re
 import requests
 import time
 from datetime import datetime, timezone
 
 _no_due_date = "0001-01-01T00:00:00Z"
 _capy_notes_marker = "<h4>🔎 Capy notes</h4>"
+_capy_steps_marker = "<h4>✅ Steps</h4>"
 # Comments Capy writes come back from the API authored by the user's own account,
 # since that is whose token it holds. Without a marker of its own the watcher would
 # read its own replies as new instructions and talk to itself forever. The header is
@@ -130,6 +132,9 @@ def _simplify_todo(task: dict) -> dict:
         "done_at": task.get("done_at") or "",
         "is_subtask": bool(related.get("parenttask")),
         "subtasks": [{"id": s.get("id"), "title": s.get("title"), "done": s.get("done", False)} for s in subtasks],
+        # Steps live in the description now, so this is where a split-up to-do's
+        # progress shows: without it the model can't see what's already ticked off
+        "steps": _read_steps(task.get("description") or ""),
         # This projection is the whitelist of what ever reaches the model, so without
         # labels here it would re-triage tasks it has already classified
         "labels": [label.get("title") for label in task.get("labels") or []],
@@ -218,6 +223,34 @@ def append_todo_description(todo_id: int, notes_html: str) -> dict:
     if not saved.ok:
         return _request_error(saved)
     return {"status": "success", "todo": _simplify_todo(saved.json())}
+
+def _checklist_item(text: str, done: bool) -> str:
+    checked = "true" if done else "false"
+    box = '<input type="checkbox" checked="checked">' if done else '<input type="checkbox">'
+    return f'<li data-checked="{checked}" data-type="taskItem"><label>{box}<span></span></label><div><p>{text}</p></div></li>'
+
+def _read_steps(description: str) -> list[dict]:
+    """The steps as they currently stand, ticked or not. Vikunja stores the checklist
+    as TipTap markup in the description and updates data-checked in place when a box is
+    tapped, so the description is the only record of progress there is."""
+    block = description.partition(_capy_steps_marker)[2].partition(_capy_notes_marker)[0]
+    return [
+        {"text": re.sub(r"<[^>]+>", "", item.partition("<div>")[2]).strip(), "done": 'data-checked="true"' in item}
+        for item in re.findall(r"<li[^>]*data-type=\"taskItem\".*?</li>", block, re.DOTALL)
+    ]
+
+def _write_steps_block(description: str, titles: list[str]) -> str:
+    """Puts the checklist in its own block between whatever the user wrote and the
+    research notes, so the three can be rewritten independently and adding steps never
+    eats an autopilot finding, or the other way round."""
+    head, notes_marker, notes = description.partition(_capy_notes_marker)
+    user_text = head.partition(_capy_steps_marker)[0].rstrip()
+    # A step that survives a rewrite keeps its tick, so refining the breakdown never
+    # quietly undoes work the user already did
+    ticked = {step["text"]: step["done"] for step in _read_steps(description)}
+    checklist = "".join(_checklist_item(title, ticked.get(title, False)) for title in titles)
+    steps = f'{_capy_steps_marker}\n<ul data-type="taskList">{checklist}</ul>'
+    return "\n".join(part for part in [user_text, steps, notes_marker + notes if notes_marker else ""] if part)
 
 def _is_capy_comment(comment: str) -> bool:
     return _capy_comment_marker in comment or _capy_comment_header in comment
@@ -477,37 +510,24 @@ def untriaged_todos() -> list[dict] | dict:
     return [todo for todo in todos if not quadrant_titles & set(todo["labels"])]
 
 def add_subtasks(parent_todo_id: int, titles: list[str]) -> dict:
-    """Creates the subtasks in the parent's project, prefixing each title with
-    the parent's name and step number (e.g. '[ change car tyres - 1 ] lift car')
-    so every step stays visibly connected to the original to-do in the list."""
+    """Writes the steps as a checklist inside the to-do's own description. Breaking a
+    project into real subtasks doubles or triples the length of the list, and a list
+    that long is the thing that makes someone stop opening it at all — the steps belong
+    inside the task they belong to, not beside it."""
     if not subtasks_enabled():
         return {"status": "error", "tool": "vikunja", "message": "Subtask splitting is disabled. To enable it, set ENABLE_VIKUNJA_SUBTASKS=true in your .env file."}
-    parent_response = _request("get", f"/tasks/{parent_todo_id}")
-    if isinstance(parent_response, dict):
-        return parent_response
-    if not parent_response.ok:
-        return _request_error(parent_response)
-    parent = parent_response.json()
-    project_id = parent.get("project_id") or _default_project_id()
-    parent_title = parent.get("title") or f"To-do {parent_todo_id}"
-    step = len((parent.get("related_tasks") or {}).get("subtask") or []) + 1
-    created = []
-    for title in titles:
-        response = _request("put", f"/projects/{project_id}/tasks", json={"title": f"[ {parent_title} - {step} ] {title}"})
-        if isinstance(response, dict) or not response.ok:
-            error = response if isinstance(response, dict) else _request_error(response)
-            error["created_so_far"] = created
-            return error
-        subtask = response.json()
-        mark_todo_seen(subtask["id"])
-        relation = _request("put", f"/tasks/{parent_todo_id}/relations", json={"other_task_id": subtask["id"], "relation_kind": "subtask"})
-        if isinstance(relation, dict) or not relation.ok:
-            error = relation if isinstance(relation, dict) else _request_error(relation)
-            error["created_so_far"] = created
-            return error
-        created.append(_simplify_todo(subtask))
-        step += 1
-    return {"status": "success", "parent_todo_id": parent_todo_id, "subtasks": created}
+    response = _request("get", f"/tasks/{parent_todo_id}")
+    if isinstance(response, dict):
+        return response
+    if not response.ok:
+        return _request_error(response)
+    current = response.json().get("description") or ""
+    saved = _patch_task(parent_todo_id, {"description": _write_steps_block(current, titles)})
+    if isinstance(saved, dict):
+        return saved
+    if not saved.ok:
+        return _request_error(saved)
+    return {"status": "success", "parent_todo_id": parent_todo_id, "steps": _read_steps(saved.json().get("description") or "")}
 
 def complete_todo(todo_id: int) -> dict:
     if not vikunja_enabled():
@@ -558,13 +578,17 @@ def mark_todo_seen(todo_id: int) -> None:
     mark_todos_seen([todo_id])
 
 def _sync_subtask_progress(tasks: list[dict]) -> None:
-    """Keeps each parent task's percent_done bar in sync with how many of its
-    subtasks are done, so completing subtasks anywhere fills the progress bar."""
+    """Keeps each task's percent_done bar in sync with how many of its steps are done,
+    so ticking boxes anywhere fills the progress bar and the Gantt view stays honest.
+    Steps written into the description count the same as older real subtasks, which
+    still exist on tasks split before the checklist became the way to do it."""
     for task in tasks:
+        steps = _read_steps(task.get("description") or "")
         subtasks = (task.get("related_tasks") or {}).get("subtask") or []
-        if not subtasks or task.get("done"):
+        done = [step["done"] for step in steps] or [s.get("done", False) for s in subtasks]
+        if not done or task.get("done"):
             continue
-        progress = round(sum(1 for s in subtasks if s.get("done", False)) / len(subtasks), 2)
+        progress = round(sum(1 for is_done in done if is_done) / len(done), 2)
         if abs(task.get("percent_done", 0) - progress) >= 0.01:
             _patch_task(task["id"], {"percent_done": progress})
 

@@ -158,7 +158,7 @@ To-dos (Vikunja):
 - Optional: `VIKUNJA_DAILY_FOCUS_HOUR` (24h UTC hour, -1 disables) sends one gentle morning message with up to 3 to-dos that matter today and a suggested starter — never the whole list.
 - Optional: `VIKUNJA_DATE_NUDGE_HOUR` (24h UTC hour, -1 disables) sends one daily message listing to-dos without a due date; reply with rough dates ("friday", "next week") and the agent sets them, keeping Vikunja's Gantt timeline useful.
 - Optional: with `ENABLE_TODO_TRIAGE=true` every incoming to-do is sorted into the four urgent/important boxes and labelled with what else is true about it; run `/triagesetup` once to create the labels and a self-populating kanban board in Vikunja. A weekly message reports how the boxes are shifting, on the same `WEEKLY_REVIEW_DAY` schedule as the stale sweep.
-- Optional: with `ENABLE_VIKUNJA_SUBTASKS=true` the agent breaks multi-step to-dos into subtasks (on its own or when asked), naming each one after the original to-do and step number (e.g. `[ change car tyres - 1 ] lift car`) so steps stay recognizable in the list. The parent's progress bar is kept in sync as subtasks get done — including ones you tick off directly in the Vikunja app.
+- Optional: with `ENABLE_VIKUNJA_SUBTASKS=true` the agent breaks multi-step to-dos into steps (on its own or when asked), written as a tickable checklist inside that to-do's own description. The steps stay inside the task rather than becoming separate to-dos, so the list never gets longer — a list that doubles in length is the thing that makes you stop opening it. Tick the boxes in the Vikunja app and the to-do's progress bar fills on its own.
 
 ```code
 /focus - pick one to-do to start now, with a tiny first step

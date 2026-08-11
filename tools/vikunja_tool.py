@@ -39,7 +39,7 @@ def update_todo(todo_id: int, title: str = "", description: str = "", due_date: 
     return connector_update_todo(todo_id, title, description, due_date, start_date, priority)
 
 def add_subtasks(parent_todo_id: int, titles: list[str]) -> dict:
-    notify_tool_use(f"🔧✅🪜 Vikunja tool used to add {len(titles)} subtasks to to-do {parent_todo_id}.")
+    notify_tool_use(f"🔧✅🪜 Vikunja tool used to add a {len(titles)} step checklist to to-do {parent_todo_id}.")
     return connector_add_subtasks(parent_todo_id, titles)
 
 def list_todo_projects() -> list[dict] | dict:
@@ -197,7 +197,7 @@ if subtasks_enabled():
         "type": "function",
         "function": {
             "name": "add_subtasks",
-            "description": "Break a Vikunja to-do into subtasks (small concrete steps). Each subtask title is automatically prefixed with the parent's name and step number (e.g. '[ change car tyres - 1 ] lift car'), so pass only the bare step titles. The parent's progress bar fills automatically as subtasks get done, which the user finds motivating. Use this whenever a to-do is really a multi-step project. Keep steps small and actionable, 3 to 6 of them.",
+            "description": "Break a Vikunja to-do into steps, written as a tickable checklist inside that to-do's own description. The steps stay inside the task rather than becoming separate to-dos, so the list itself never gets longer — a list that doubles in length is the thing that makes someone stop opening it. The user ticks the boxes in Vikunja and the to-do's progress bar fills on its own. Use this whenever a to-do is really a multi-step project. Keep steps small and actionable, 3 to 6 of them. Calling this again replaces the whole checklist, so pass every step you want to keep, and don't call it on a to-do that already has the steps it needs.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -208,7 +208,7 @@ if subtasks_enabled():
                     "titles": {
                         "type": "array",
                         "items": {"type": "string"},
-                        "description": "The subtask titles, in the order they should be done, each a small concrete step (e.g. 'Find the workshop phone number').",
+                        "description": "The steps, in the order they should be done, each a small concrete action (e.g. 'Find the workshop phone number'). Plain text, no numbering or bullets, the checklist adds those.",
                     },
                 },
                 "required": ["parent_todo_id", "titles"],

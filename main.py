@@ -183,8 +183,9 @@ if __name__ == "__main__":
                             completed_todos = todo_updates["completed"]
                             if new_todos:
                                 breakdown_hint = (
-                                    "If one is clearly a multi-step project, break it into 3 to 6 small subtasks with add_subtasks and mention you did, "
-                                    "so its progress bar and Gantt view work; if the breakdown isn't obvious, don't guess, just acknowledge. "
+                                    "If one is clearly a multi-step project, break it into 3 to 6 small steps with add_subtasks and mention you did; they "
+                                    "become a checklist inside that to-do rather than new to-dos, so the list stays the same length. If the breakdown "
+                                    "isn't obvious, don't guess, just acknowledge. "
                                 ) if subtasks_enabled() else ""
                                 # Triage rides along with the acknowledgement instead of costing a second call
                                 autopilot_hint = (

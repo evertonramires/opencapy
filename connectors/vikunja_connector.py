@@ -245,7 +245,10 @@ def _write_steps_block(description: str, titles: list[str]) -> str:
     eats an autopilot finding, or the other way round."""
     head, notes_marker, notes = description.partition(_capy_notes_marker)
     user_text = head.partition(_capy_steps_marker)[0].rstrip()
-    checklist = "".join(_checklist_item(title, False) for title in titles)
+    # A step that survives a rewrite keeps its tick, so refining the breakdown never
+    # quietly undoes work the user already did
+    ticked = {step["text"]: step["done"] for step in _read_steps(description)}
+    checklist = "".join(_checklist_item(title, ticked.get(title, False)) for title in titles)
     steps = f'{_capy_steps_marker}\n<ul data-type="taskList">{checklist}</ul>'
     return "\n".join(part for part in [user_text, steps, notes_marker + notes if notes_marker else ""] if part)
 

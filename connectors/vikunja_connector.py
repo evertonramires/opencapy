@@ -42,6 +42,15 @@ _triage_labels = {
     "@waiting-for": ("@waiting-for", "2c3e50"),
 }
 _triage_board_title = "Eisenhower"
+# The same four slugs as the quadrant labels, so there is nothing extra to keep aligned.
+# A to-do's box is its project now; the label rides along so the quadrant is still
+# something you can filter on from anywhere.
+_quadrant_projects = {
+    "do": "🔥 Do",
+    "schedule": "📅 Schedule",
+    "delegate": "👤 Delegate",
+    "drop": "🗑 Drop",
+}
 _request_timeout_seconds = 15
 _request_retries = 1
 _request_retry_delay_seconds = 2
@@ -115,6 +124,18 @@ def _request_error(response: requests.Response) -> dict:
         details = response.text
     return {"status": "error", "tool": "vikunja", "message": f"Vikunja API request failed with status {response.status_code}.", "details": details}
 
+_project_title_cache = {}
+
+def _project_titles() -> dict:
+    """Project id -> the box's name, memoised because _simplify_todo runs once per task
+    and must not read the disk or the API just to name a project. Cleared whenever the
+    projects are (re)resolved, which is the only thing that can change it."""
+    if not _project_title_cache:
+        ids = _read_state().get("triage_project_ids") or {}
+        _project_title_cache.update({pid: _quadrant_projects[slug] for slug, pid in ids.items() if slug in _quadrant_projects})
+        _project_title_cache[_default_project_id()] = "Inbox"
+    return _project_title_cache
+
 def _simplify_todo(task: dict) -> dict:
     due_date = task.get("due_date") or ""
     if due_date == _no_due_date:
@@ -127,6 +148,10 @@ def _simplify_todo(task: dict) -> dict:
         "description": task.get("description") or "",
         "done": task.get("done", False),
         "due_date": due_date,
+        # The box a to-do is in is its project now, so a bare id tells the model nothing
+        "start_date": "" if task.get("start_date") in (None, _no_due_date) else task["start_date"],
+        "end_date": "" if task.get("end_date") in (None, _no_due_date) else task["end_date"],
+        "box": _project_titles().get(task.get("project_id"), ""),
         "priority": task.get("priority", 0),
         "project_id": task.get("project_id"),
         "percent_done": task.get("percent_done", 0),
@@ -158,6 +183,25 @@ def add_todo(title: str, due_date: str = "", description: str = "", priority: in
         mark_todo_seen(created["id"])
     return {"status": "success", "todo": _simplify_todo(created)}
 
+def _all_tasks() -> list[dict] | dict:
+    """Every task, paged until exhausted. list_todos deliberately reads one page because
+    a prompt does not want two hundred to-dos in it, but anything that has to be complete
+    rather than representative needs this — a sweep that reports "all done" while a
+    second page still holds work is worse than no sweep at all."""
+    tasks = []
+    page = 1
+    while True:
+        response = _request("get", "/tasks", params={"per_page": 50, "page": page, "sort_by": "id", "order_by": "desc"})
+        if isinstance(response, dict):
+            return response
+        if not response.ok:
+            return _request_error(response)
+        batch = response.json() or []
+        tasks += batch
+        if len(batch) < 50:
+            return tasks
+        page += 1
+
 def list_todos(include_done: bool = False) -> list[dict] | dict:
     if not vikunja_enabled():
         return _disabled_error()
@@ -182,6 +226,9 @@ def update_todo(todo_id: int, title: str = "", description: str = "", due_date: 
         payload["description"] = description
     if due_date:
         payload["due_date"] = due_date
+        # The Gantt bar is drawn from start to end, so a due date that isn't also an end
+        # date moves nothing on the chart the user actually plans in
+        payload["end_date"] = due_date
     if start_date:
         payload["start_date"] = start_date
     if priority >= 0:
@@ -392,6 +439,49 @@ def ensure_triage_labels(refresh: bool = False) -> dict:
     _write_state(state)
     return ids
 
+def ensure_triage_projects(refresh: bool = False) -> dict:
+    """Creates a project per box and caches slug -> id, mirroring ensure_triage_labels
+    down to the refresh escape hatch. Vikunja gives every new project a List, Gantt,
+    Table and Kanban view of its own, and the kanban already comes with To-Do, Doing and
+    Done buckets, so the boards ask for no work here."""
+    cached = _read_state().get("triage_project_ids") or {}
+    if not refresh and set(cached) >= set(_quadrant_projects):
+        return cached
+    response = _request("get", "/projects", params={"per_page": 50})
+    if isinstance(response, dict) or not response.ok:
+        return {}
+    existing = {project["title"]: project["id"] for project in response.json() or []}
+    ids = {}
+    for slug, title in _quadrant_projects.items():
+        if title in existing:
+            ids[slug] = existing[title]
+            continue
+        created = _request("put", "/projects", json={"title": title})
+        if isinstance(created, dict) or not created.ok:
+            return {}
+        ids[slug] = created.json()["id"]
+    state = _read_state()
+    state["triage_project_ids"] = ids
+    _write_state(state)
+    _project_title_cache.clear()
+    return ids
+
+def _move_to_quadrant_project(todo_id: int, quadrant: str) -> dict:
+    """Files the to-do under its box. There is no move endpoint in Vikunja — changing
+    project_id is the move — and it keeps the task's id, labels, comments, checklist and
+    relations, recalculating only the per-project index. Vikunja also re-files the card
+    into the destination board on the way, into Done if the task is done and To-Do
+    otherwise, which is the whole of what the per-project kanban needs."""
+    ids = ensure_triage_projects()
+    if not ids:
+        return {"status": "error", "tool": "vikunja", "message": "Could not read or create the quadrant projects in Vikunja."}
+    response = _patch_task(todo_id, {"project_id": ids[quadrant]})
+    if isinstance(response, dict):
+        return response
+    if not response.ok:
+        return _request_error(response)
+    return {"status": "success", "todo_id": todo_id, "project": _quadrant_projects[quadrant]}
+
 def set_todo_labels(todo_id: int, slugs: list[str]) -> dict:
     """Sets the task's triage labels in one call. Deliberately not _patch_task: the bulk
     endpoint touches only labels, so unlike a whole-task write it cannot blank the
@@ -426,6 +516,12 @@ def triage_todo(todo_id: int, quadrant: str, extra_labels: list[str] = [], reaso
     saved = set_todo_labels(todo_id, [quadrant] + extras)
     if saved.get("status") != "success":
         return saved
+    # Label and project are written by the same call on purpose: they say the same thing
+    # in two places, and the only way to stop them drifting is to make doing one without
+    # the other impossible
+    moved = _move_to_quadrant_project(todo_id, quadrant)
+    if moved.get("status") != "success":
+        return moved
     # A drop is only ever offered, never carried out, so it has to leave something the
     # user can act on. The reasoning goes in a comment rather than the description: the
     # Capy block there belongs to research notes, which would overwrite it the moment
@@ -436,12 +532,12 @@ def triage_todo(todo_id: int, quadrant: str, extra_labels: list[str] = [], reaso
         current = get_todo(todo_id)
         if current.get("status") == "success":
             _queue_drop_offer(todo_id, current["todo"]["title"])
-    return {"status": "success", "todo_id": todo_id, "quadrant": _triage_labels[quadrant][0], "labels": saved["labels"]}
+    return {"status": "success", "todo_id": todo_id, "quadrant": _triage_labels[quadrant][0], "project": moved["project"], "labels": saved["labels"]}
 
 def set_todo_quadrant(todo_id: int, quadrant: str) -> dict:
     """Moves a to-do to another box by hand, keeping everything else triage decided
-    about it. The board's buckets are filters, so a card cannot be dragged between
-    columns and this is how the user overrules a verdict."""
+    about it. This is how the user overrules a verdict without having to re-run triage
+    and hope it lands differently."""
     if quadrant not in _quadrant_slugs:
         return {"status": "error", "tool": "vikunja", "message": f"Unknown quadrant '{quadrant}', pick one of {_quadrant_slugs}."}
     current = get_todo(todo_id)
@@ -452,7 +548,10 @@ def set_todo_quadrant(todo_id: int, quadrant: str) -> dict:
     saved = set_todo_labels(todo_id, [quadrant] + extras)
     if saved.get("status") != "success":
         return saved
-    return {"status": "success", "todo_id": todo_id, "title": current["todo"]["title"], "quadrant": _triage_labels[quadrant][0]}
+    moved = _move_to_quadrant_project(todo_id, quadrant)
+    if moved.get("status") != "success":
+        return moved
+    return {"status": "success", "todo_id": todo_id, "title": current["todo"]["title"], "quadrant": _triage_labels[quadrant][0], "project": moved["project"]}
 
 def _queue_drop_offer(todo_id: int, title: str) -> None:
     state = _read_state()
@@ -480,44 +579,37 @@ def todo_action_buttons() -> list[list[tuple[str, str]]] | None:
     ]
     return (undo_title_buttons() or []) + drops or None
 
-def configure_triage_board() -> dict:
-    """Adds the four boxes to Vikunja as a filter-driven kanban view. The buckets are
-    built from label ids, so this has to run after the labels exist. Re-running updates
-    the view in place rather than stacking a second copy of it."""
+def configure_triage_projects() -> dict:
+    """Creates the tags and a project per box, then retires the old Eisenhower view.
+    The sidebar shows the four boxes now, so a board that drew the same four columns out
+    of label filters is one more place saying the same thing — and the one that could
+    disagree with the others."""
     if not triage_enabled():
         return {"status": "error", "tool": "vikunja", "message": "To-do triage is disabled. To enable it, set ENABLE_TODO_TRIAGE=true in your .env file."}
-    ids = ensure_triage_labels(refresh=True)
-    if not ids:
+    labels = ensure_triage_labels(refresh=True)
+    if not labels:
         return {"status": "error", "tool": "vikunja", "message": "Could not read or create the triage labels in Vikunja."}
-    project_id = _default_project_id()
-    response = _request("get", f"/projects/{project_id}/views")
-    if isinstance(response, dict):
-        return response
-    if not response.ok:
-        return _request_error(response)
-    # An unlabelled task matches "not in", which is what gives the board somewhere
-    # honest to show whatever has not been triaged yet instead of hiding it
-    buckets = [{"title": "📥 untriaged", "filter": {"filter": f"labels not in {','.join(str(ids[slug]) for slug in _quadrant_slugs)} && done = false"}}]
-    buckets += [{"title": _triage_labels[slug][0], "filter": {"filter": f"labels in {ids[slug]} && done = false"}} for slug in _quadrant_slugs]
-    payload = {"title": _triage_board_title, "view_kind": "kanban", "bucket_configuration_mode": "filter", "bucket_configuration": buckets}
-    existing = next((view for view in response.json() or [] if view.get("title") == _triage_board_title), None)
-    if existing:
-        saved = _request("post", f"/projects/{project_id}/views/{existing['id']}", json={**existing, **payload})
-    else:
-        saved = _request("put", f"/projects/{project_id}/views", json=payload)
-    if isinstance(saved, dict):
-        return saved
-    if not saved.ok:
-        return _request_error(saved)
-    return {"status": "success", "project_id": project_id, "view": _triage_board_title, "labels": len(ids), "buckets": [bucket["title"] for bucket in buckets]}
+    projects = ensure_triage_projects(refresh=True)
+    if not projects:
+        return {"status": "error", "tool": "vikunja", "message": "Could not read or create the quadrant projects in Vikunja."}
+    views = _request("get", f"/projects/{_default_project_id()}/views")
+    retired = False
+    if not isinstance(views, dict) and views.ok:
+        for view in views.json() or []:
+            if view.get("title") == _triage_board_title:
+                _request("delete", f"/projects/{_default_project_id()}/views/{view['id']}")
+                retired = True
+    return {"status": "success", "labels": len(labels), "projects": [_quadrant_projects[slug] for slug in _quadrant_projects], "retired_board": retired}
 
 def untriaged_todos() -> list[dict] | dict:
-    """Open to-dos carrying no quadrant label yet, for the backfill sweep."""
-    todos = list_todos()
-    if isinstance(todos, dict):
-        return todos
-    quadrant_titles = {_triage_labels[slug][0] for slug in _quadrant_slugs}
-    return [todo for todo in todos if not quadrant_titles & set(todo["labels"])]
+    """Open to-dos still sitting in the Inbox, which is now the whole definition of
+    untriaged. Paged rather than capped: a sweep that quietly stops at fifty would report
+    the list clear while a second page still held work."""
+    tasks = _all_tasks()
+    if isinstance(tasks, dict):
+        return tasks
+    inbox = _default_project_id()
+    return [_simplify_todo(task) for task in tasks if not task.get("done") and task.get("project_id") == inbox]
 
 def add_subtasks(parent_todo_id: int, titles: list[str]) -> dict:
     """Writes the steps as a checklist inside the to-do's own description. Breaking a
@@ -602,6 +694,28 @@ def _sync_subtask_progress(tasks: list[dict]) -> None:
         if abs(task.get("percent_done", 0) - progress) >= 0.01:
             _patch_task(task["id"], {"percent_done": progress})
 
+def _has_date(task: dict, field: str) -> bool:
+    return bool(task.get(field)) and task.get(field) != _no_due_date
+
+def _sync_gantt_dates(tasks: list[dict]) -> None:
+    """Gives every to-do the two dates a Gantt bar is drawn between. The start comes from
+    the task's own created stamp rather than from now, so a to-do captured while the bot
+    was down still shows its real age. The end is the moment it was finished, which is
+    what turns the bar into how long the thing actually took — done_at is system
+    controlled and cannot be written, so the value has to be copied across. An open task
+    with a due date gets that as its end instead, so planned work draws a bar too."""
+    for task in tasks:
+        changes = {}
+        if not _has_date(task, "start_date") and task.get("created"):
+            changes["start_date"] = task["created"]
+        if not _has_date(task, "end_date"):
+            if task.get("done") and _has_date(task, "done_at"):
+                changes["end_date"] = task["done_at"]
+            elif not task.get("done") and _has_date(task, "due_date"):
+                changes["end_date"] = task["due_date"]
+        if changes:
+            _patch_task(task["id"], changes)
+
 def check_todo_updates() -> dict:
     """Returns {"status": "success", "new": [...], "completed": [...]} with to-dos
     created outside the bot and to-dos completed since the last check, without
@@ -617,6 +731,7 @@ def check_todo_updates() -> dict:
         return _request_error(response)
     tasks = response.json() or []
     _sync_subtask_progress(tasks)
+    _sync_gantt_dates(tasks)
     current_ids = {task["id"] for task in tasks}
     current_done_ids = {task["id"] for task in tasks if task.get("done", False)}
     state = _read_state()
@@ -671,7 +786,11 @@ def check_todo_comments() -> dict:
     # Absent on the very first run only: existing threads are history, not instructions
     seeding = "comment_state" not in state
     comment_state = state.get("comment_state") or {}
-    fresh_state = {}
+    # Carried over rather than rebuilt from scratch. This scan only sees the newest fifty
+    # tasks, and a watermark dropped because its task fell out of that window comes back
+    # as zero — which would replay a whole old thread as fresh instructions the moment
+    # anything touched that task again. Same reasoning as keeping done tasks' watermarks.
+    fresh_state = dict(comment_state)
     threads = []
     for task in tasks:
         key = str(task["id"])
@@ -846,15 +965,21 @@ def weekly_quadrant_balance() -> dict | bool:
     must mark_balance_sent after sending."""
     if not triage_enabled() or not _weekly_slot("last_balance_week"):
         return False
-    todos = list_todos()
-    if isinstance(todos, dict):
+    tasks = _all_tasks()
+    if isinstance(tasks, dict):
         return False
+    # Counted by project rather than by label: the projects are the boxes now, and
+    # paging means the split is the real one instead of the first fifty rows of it
+    ids = ensure_triage_projects()
+    by_project = {pid: slug for slug, pid in ids.items()}
     counts = {slug: 0 for slug in _quadrant_slugs}
     untriaged = 0
-    for todo in todos:
-        quadrant = next((slug for slug in _quadrant_slugs if _triage_labels[slug][0] in todo["labels"]), "")
-        if quadrant:
-            counts[quadrant] += 1
+    for task in tasks:
+        if task.get("done"):
+            continue
+        slug = by_project.get(task.get("project_id"))
+        if slug:
+            counts[slug] += 1
         else:
             untriaged += 1
     return {"counts": counts, "untriaged": untriaged, "last_week": _read_state().get("last_balance_counts") or {}}

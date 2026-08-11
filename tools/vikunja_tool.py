@@ -92,7 +92,7 @@ add_todo_tool = {
                 },
                 "project_id": {
                     "type": "integer",
-                    "description": "Optional Vikunja project id to add the to-do to. Use 0 for the default project. Use list_todo_projects to find project ids.",
+                    "description": "Optional Vikunja project id. Almost always leave this as 0: new to-dos belong in the Inbox, and triage_todo is what moves one into a box. Use list_todo_projects to find project ids.",
                 },
             },
             "required": ["title"],
@@ -180,7 +180,7 @@ update_todo_tool = {
                 },
                 "start_date": {
                     "type": "string",
-                    "description": "Optional start date as an ISO8601 UTC timestamp, shown in the Gantt view. Leave empty to keep the current one.",
+                    "description": "Optional start date as an ISO8601 UTC timestamp. Every to-do already gets one set to when it was created, so the Gantt shows how long it has been running — only pass this when the user says a task genuinely starts later.",
                 },
                 "priority": {
                     "type": "integer",
@@ -317,8 +317,9 @@ if triage_enabled():
         "function": {
             "name": "triage_todo",
             "description": (
-                "File a Vikunja to-do into the user's four boxes and tag what else is true about it. Run this on every to-do that has no "
-                "quadrant label yet. Two independent axes decide the box. IMPORTANT means it moves something the user actually cares about "
+                "File a Vikunja to-do into the user's four boxes and tag what else is true about it. Each box is its own project, so this "
+                "moves the to-do out of the Inbox and into that project as well as tagging it; the Inbox is only ever the unsorted pile. "
+                "Run this on every to-do still sitting in the Inbox. Two independent axes decide the box. IMPORTANT means it moves something the user actually cares about "
                 "forward, or there are real consequences if it never happens; a task can be loud and still not be important. URGENT means "
                 "there is time pressure on it right now, a deadline, an appointment, something that expires or blocks someone else; a task "
                 "can matter enormously and not be urgent at all, and those are the ones that quietly never get done.\n"
@@ -344,9 +345,10 @@ if triage_enabled():
                         "type": "string",
                         "enum": ["do", "schedule", "delegate", "drop"],
                         "description": (
-                            "Which box it belongs in. 'do' is urgent and important, handle it personally and soon. 'schedule' is important "
-                            "but not urgent, the quadrant worth protecting, so give it a date. 'delegate' is urgent but not important, it "
-                            "wants to come off the user's plate. 'drop' is neither and is only ever a suggestion."
+                            "Which box it belongs in, and therefore which project it moves to. 'do' is urgent and important, handle it "
+                            "personally and soon. 'schedule' is important but not urgent, the quadrant worth protecting, so give it a date. "
+                            "'delegate' is urgent but not important, it wants to come off the user's plate. 'drop' is neither and is only "
+                            "ever a suggestion."
                         ),
                     },
                     "extra_labels": {
@@ -382,7 +384,7 @@ list_todo_projects_tool = {
     "type": "function",
     "function": {
         "name": "list_todo_projects",
-        "description": "List the Vikunja projects (to-do lists) with their ids, useful to pick a project_id for add_todo.",
+        "description": "List the Vikunja projects with their ids. The Inbox holds everything not yet sorted, and there is a project per box (Do, Schedule, Delegate, Drop) that triage_todo files things into.",
         "parameters": {
             "type": "object",
             "properties": {},

@@ -200,7 +200,8 @@ if __name__ == "__main__":
                                     "wording in your reply. Leave the ones that are already clear actions exactly as they are. "
                                 ) if retitle_enabled() else ""
                                 triage_hint = (
-                                    "Call triage_todo once for each of these to file it into the user's four boxes. Mention the box in a few words, "
+                                    "Call triage_todo once for each of these to file it into the user's four boxes, which moves it out of the Inbox "
+                                    "into that box's own project. Mention the box in a few words, "
                                     "as a note not a verdict, and never explain the whole method back to them. If it comes out as 'ai-can-do' and you "
                                     "could genuinely do it alone, queue it with queue_task_work in the same breath. If it comes out 'drop' or "
                                     "'not-needed', say so gently and leave it entirely up to them, a button will be offered and you must not delete "
@@ -355,8 +356,8 @@ if __name__ == "__main__":
                     balance = weekly_quadrant_balance()
                     if isinstance(balance, dict):
                         response = deferred_prompt(
-                            "[system] Weekly balance check on the user's four boxes. Open to-dos per box right now: "
-                            f"{json.dumps(balance['counts'])}, plus {balance['untriaged']} not yet sorted. Last week's numbers were "
+                            "[system] Weekly balance check on the user's four boxes, which are projects in Vikunja. Open to-dos per box right now: "
+                            f"{json.dumps(balance['counts'])}, plus {balance['untriaged']} still sitting in the Inbox unsorted. Last week's numbers were "
                             f"{json.dumps(balance['last_week'])}. The thing worth noticing is the direction of travel, not the totals: "
                             "'schedule' (important but not urgent) growing is the healthy sign, and a big 'do' pile means they're living in "
                             "firefights. Two or three sentences, curious rather than scored, no advice unless one number really stands out. "

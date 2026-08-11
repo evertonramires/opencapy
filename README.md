@@ -157,7 +157,7 @@ To-dos (Vikunja):
 - The to-do features are designed to be ADHD-friendly: capturing is instant (no interrogation about details), and starting is helped by `/focus`, which picks exactly one to-do and suggests a first step small enough to take two minutes, offering a check-in afterwards.
 - Optional: `VIKUNJA_DAILY_FOCUS_HOUR` (24h UTC hour, -1 disables) sends one gentle morning message with up to 3 to-dos that matter today and a suggested starter — never the whole list.
 - Optional: `VIKUNJA_DATE_NUDGE_HOUR` (24h UTC hour, -1 disables) sends one daily message listing to-dos without a due date; reply with rough dates ("friday", "next week") and the agent sets them, keeping Vikunja's Gantt timeline useful.
-- Optional: with `ENABLE_TODO_TRIAGE=true` every incoming to-do is sorted into the four urgent/important boxes and labelled with what else is true about it; run `/triagesetup` once to create the labels and a self-populating kanban board in Vikunja. A weekly message reports how the boxes are shifting, on the same `WEEKLY_REVIEW_DAY` schedule as the stale sweep.
+- Optional: with `ENABLE_TODO_TRIAGE=true` every incoming to-do is sorted into the four urgent/important boxes and labelled with what else is true about it; run `/triagesetup` once to create the tags and a project per box. `VIKUNJA_DEFAULT_PROJECT_ID` then means strictly the unsorted Inbox. A weekly message reports how the boxes are shifting, on the same `WEEKLY_REVIEW_DAY` schedule as the stale sweep.
 - Optional: with `ENABLE_VIKUNJA_SUBTASKS=true` the agent breaks multi-step to-dos into steps (on its own or when asked), written as a tickable checklist inside that to-do's own description. The steps stay inside the task rather than becoming separate to-dos, so the list never gets longer — a list that doubles in length is the thing that makes you stop opening it. Tick the boxes in the Vikunja app and the to-do's progress bar fills on its own.
 
 ```code
@@ -284,20 +284,28 @@ Triage (`ENABLE_TODO_TRIAGE=true`):
 Every to-do that arrives gets sorted into the four urgent/important boxes and tagged
 with what else is true about it — whether an AI, someone you could hire or a product
 could take it off you, whether it's really a project in disguise, whether it's a
-two-minute job, and what it needs from you to get done. Run `/triagesetup` once and
-the boxes show up in Vikunja as a kanban board whose columns fill themselves from the
-labels, with an **untriaged** column so nothing hides. A "drop" verdict is only ever
+two-minute job, and what it needs from you to get done. A "drop" verdict is only ever
 offered as a button; Capy never deletes anything on its own.
 
+Run `/triagesetup` once and each box becomes **its own project** — Do, Schedule,
+Delegate, Drop — leaving the Inbox as strictly the pile of things not yet sorted, so
+its length tells you how far behind triage is. Filing a to-do moves it into that
+project and Vikunja files the card into that project's own To-Do / Doing / Done board.
+The box is also kept as a tag, so you can still filter by quadrant from anywhere.
+
 ```code
-/triagesetup - create the labels and the Eisenhower board in Vikunja
+/triagesetup - create the tags and the four box projects in Vikunja
 /triage 12 - sort to-do 12 into a box
-/triageall - sort everything not yet sorted
+/triageall - sort everything still in the Inbox
 /quadrant 12 schedule - move to-do 12 to another box by hand
 ```
 
-The board's columns are filters, so cards move when their labels change rather than by
-being dragged — `/quadrant` is how you overrule a verdict.
+Timeline (`ENABLE_VIKUNJA` on, no extra setting):
+
+Every to-do gets a start date of when it was created, and an end date of when you
+ticked it done — so the Gantt view shows how long each thing actually took, rather
+than being empty. To-dos with a due date get a planned bar too. Vikunja draws a bar
+between start and end, which is why both are needed.
 
 When a sprint's time is up you get a message with **Done / +10 min / Stuck** buttons,
 so answering is one tap.

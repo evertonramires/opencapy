@@ -1,12 +1,16 @@
+import difflib
+import html
 import json
 import os
 import re
 import requests
 import time
+import unicodedata
 from datetime import datetime, timezone
 
 _no_due_date = "0001-01-01T00:00:00Z"
 _capy_notes_marker = "<h4>🔎 Capy notes</h4>"
+_capy_merge_marker = "<h4>➕ Also captured</h4>"
 # Only kept to strip it off to-dos split before the steps went bare, never written
 _capy_steps_marker = "<h4>✅ Steps</h4>"
 _task_list_pattern = r'<ul data-type="taskList">.*?</ul>'
@@ -69,6 +73,9 @@ def retitle_enabled() -> bool:
 
 def triage_enabled() -> bool:
     return vikunja_enabled() and os.getenv("ENABLE_TODO_TRIAGE", "false").lower() in ["true", "1", "yes"]
+
+def dedupe_enabled() -> bool:
+    return vikunja_enabled() and os.getenv("ENABLE_TODO_DEDUPE", "false").lower() in ["true", "1", "yes"]
 
 def _disabled_error() -> dict:
     return {"status": "error", "tool": "vikunja", "message": "Vikunja to-do tool is disabled. To enable it, set ENABLE_VIKUNJA=true and configure VIKUNJA_API_HOST and VIKUNJA_API_TOKEN in your .env file."}
@@ -167,9 +174,290 @@ def _simplify_todo(task: dict) -> dict:
         "labels": [label.get("title") for label in task.get("labels") or []],
     }
 
-def add_todo(title: str, due_date: str = "", description: str = "", priority: int = 0, project_id: int = 0) -> dict:
+def _plain_text(html_text: str) -> str:
+    """Whatever a human would read out of a description: no markup, no entities."""
+    return re.sub(r"\s+", " ", html.unescape(re.sub(r"<[^>]+>", " ", html_text or ""))).strip()
+
+def _fold(text: str) -> str:
+    """Lowercased and stripped of accents, so 'Consultório' and 'consultorio' are the
+    same word — the second capture of a thought is rarely typed with the same care as
+    the first."""
+    stripped = unicodedata.normalize("NFKD", text or "").encode("ascii", "ignore").decode()
+    return re.sub(r"[^a-z0-9\s]", " ", stripped.lower())
+
+# Function words only. Verbs stay in on purpose: 'call mom' and 'buy mom a gift' share
+# their only other word, and dropping the verb would collapse them into one to-do.
+_capture_stopwords = set(_fold(
+    "a an the and or of to for from in on at by with about into my me i you your we us it its this that these those "
+    "is are be am was were do does did done have has had need needs want wants should would could will shall "
+    "so too also please just now then there here remember reminder todo task "
+    "o os as um uma uns umas de do da dos das em no na nos nas ao aos e ou que se por pelo pela para pra pro com sem sobre "
+    "meu minha meus minhas seu sua eu voce nos isso isto esse essa este esta aquele aquela "
+    "e eh ser estar tem tenho ter preciso precisa quero quer devo deve vou vai ja agora aqui ali tarefa lembrar lembrete"
+).split())
+
+def _significant_words(text: str) -> list[str]:
+    return [word for word in _fold(_plain_text(text)).split() if word not in _capture_stopwords and (len(word) > 1 or word.isdigit())]
+
+def _same_word(one: str, other: str) -> bool:
+    """Counts near-spellings as the same word, so a plural or a typo doesn't hide a
+    duplicate. Only for words long enough that a high ratio means something."""
+    if one == other:
+        return True
+    return min(len(one), len(other)) >= 4 and difflib.SequenceMatcher(None, one, other).ratio() >= 0.86
+
+def _word_overlap(mine: list[str], theirs: list[str]) -> float:
+    """How much two bags of words say the same thing. Dice on its own would miss the
+    case that matters most — the same task written once in a hurry and once with detail
+    — so a title whose every word appears in the other counts as a match outright:
+    'dentist' sitting entirely inside 'Call the dentist about the cleaning' is the whole
+    signal there. Sharing some words but not all is deliberately not enough, because
+    that is also the shape of 'pay the water bill' next to 'pay the electricity bill'."""
+    if not mine or not theirs:
+        return 0.0
+    remaining = list(theirs)
+    hits = 0
+    for word in mine:
+        match = next((other for other in remaining if _same_word(word, other)), None)
+        if match:
+            remaining.remove(match)
+            hits += 1
+    dice = 2 * hits / (len(mine) + len(theirs))
+    return max(dice, 0.75) if hits == min(len(mine), len(theirs)) else dice
+
+def _similarity(mine: str, theirs: str) -> float:
+    my_words, their_words = _significant_words(mine), _significant_words(theirs)
+    if not my_words or not their_words:
+        # Nothing but filler on one side, so fall back to comparing the raw wording
+        return difflib.SequenceMatcher(None, _fold(mine), _fold(theirs)).ratio()
+    return _word_overlap(my_words, their_words)
+
+def _covered_by(my_words: list[str], text: str) -> bool:
+    """True when everything the user just said is already written on that to-do, title
+    or description. This is the case they actually described: the note was taken, they
+    forgot, and they wrote the same thing again in fewer or different words."""
+    their_words = _significant_words(text)
+    return len(my_words) >= 2 and bool(their_words) and all(any(_same_word(word, other) for other in their_words) for word in my_words)
+
+def _duplicate_threshold() -> float:
+    """Deliberately permissive. Two to-dos sharing most of their words are ambiguous by
+    nature — 'book dentist appointment' next to 'book doctor appointment' reads exactly
+    like the same thing written twice — and the two mistakes are not equal: a duplicate
+    that slips through is the problem this exists to solve, while a false catch costs
+    one sentence and a tap, since the capture is held and offered back either way."""
+    return float(os.getenv("TODO_DUPLICATE_THRESHOLD", "0.55"))
+
+# Below the threshold but close enough to be worth naming, never enough to block a capture
+_similar_margin = 0.04
+
+def _recently_done(task: dict) -> bool:
+    """A chore finished months ago and written down again is a new chore. One finished
+    days ago is almost always the same one, forgotten."""
+    done_at = _parse_timestamp(task.get("done_at") or "")
+    if not done_at:
+        return False
+    return (datetime.now(timezone.utc) - done_at).days <= int(os.getenv("TODO_DUPLICATE_DONE_DAYS", "14"))
+
+def _rank_duplicates(title: str, description: str = "", tasks: list[dict] = [], limit: int = 3, exclude_id: int = 0) -> list[dict]:
+    """The to-dos that already say this, best match first. 'duplicate' means treat it as
+    the same thing, 'similar' means worth mentioning and nothing more."""
+    threshold = _duplicate_threshold()
+    my_words = _significant_words(f"{title} {_plain_text(description)}")
+    matches = []
+    for task in tasks:
+        if task.get("id") == exclude_id or (task.get("related_tasks") or {}).get("parenttask"):
+            continue
+        if task.get("done") and not _recently_done(task):
+            continue
+        their_title = task.get("title") or ""
+        score = _similarity(title, their_title)
+        if _covered_by(my_words, f"{their_title} {_user_description_text(task.get('description') or '')}"):
+            score = max(score, threshold)
+        if score < threshold - _similar_margin:
+            continue
+        matches.append({
+            "score": round(score, 2),
+            "match": "duplicate" if score >= threshold else "similar",
+            "todo": _simplify_todo(task),
+        })
+    return sorted(matches, key=lambda match: match["score"], reverse=True)[:limit]
+
+def find_duplicate_todos(title: str, description: str = "", limit: int = 3) -> list[dict] | dict:
+    """To-dos that already cover what is about to be written down. Reads every page:
+    the whole point is the to-do the user forgot, and that is exactly the one that has
+    fallen off the first page."""
     if not vikunja_enabled():
         return _disabled_error()
+    tasks = _all_tasks()
+    if isinstance(tasks, dict):
+        return tasks
+    return _rank_duplicates(title, description, tasks, limit)
+
+def duplicates_for_new_todos(todos: list[dict]) -> dict:
+    """{to-do id: matches} for to-dos that just appeared, in a single scan, so the
+    watcher can flag a duplicate written straight into Vikunja without paying for one
+    sweep per task."""
+    if not dedupe_enabled() or not todos:
+        return {}
+    tasks = _all_tasks()
+    if isinstance(tasks, dict):
+        return {}
+    found = {}
+    for todo in todos:
+        duplicates = [match for match in _rank_duplicates(todo["title"], todo.get("description") or "", tasks, exclude_id=todo["id"]) if match["match"] == "duplicate"]
+        if duplicates:
+            found[todo["id"]] = duplicates
+    return found
+
+def _user_description_text(description: str) -> str:
+    """What the user themselves put on the to-do: their own text and their steps, with
+    Capy's research notes and merge log left out. Matching against those would let the
+    bot's own writing make everything look like a duplicate of everything else."""
+    head = (description or "").partition(_capy_notes_marker)[0].partition(_capy_merge_marker)[0]
+    return _plain_text(head)
+
+def _append_merge_note(description: str, details_html: str) -> str:
+    """Adds one dated line to the to-do's merge log, creating the block if this is the
+    first merge. It sits above the research notes and below whatever the user wrote, so
+    add_todo_context and add_subtasks can each rewrite their own block without touching
+    this one."""
+    head, notes_marker, notes = (description or "").partition(_capy_notes_marker)
+    item = f"<li>{datetime.now(timezone.utc).strftime('%Y-%m-%d')} — {details_html}</li>"
+    before, marker, block = head.partition(_capy_merge_marker)
+    if marker and "</ul>" in block:
+        head = before + marker + block.replace("</ul>", f"{item}</ul>", 1)
+    else:
+        head = "\n".join(part for part in [head.rstrip(), f"{_capy_merge_marker}<ul>{item}</ul>"] if part.strip())
+    return "\n".join(part for part in [head, notes_marker + notes if notes_marker else ""] if part)
+
+def merge_into_todo(todo_id: int, details: str, due_date: str = "", priority: int = 0) -> dict:
+    """Folds a second capture of the same thing into the to-do that already exists.
+    Empty fields get filled, fields that already have a value are never overwritten —
+    they come back as conflicts for the user to settle, because a due date silently
+    replaced is a promise the list quietly stops keeping."""
+    if not vikunja_enabled():
+        return _disabled_error()
+    current = get_todo(todo_id)
+    if current.get("status") != "success":
+        return current
+    todo = current["todo"]
+    conflicts = []
+    changes = {"description": _append_merge_note(todo["description"], details)}
+    if due_date:
+        if not todo["due_date"]:
+            changes["due_date"] = due_date
+            # Same reason as update_todo: the Gantt bar is drawn to the end date
+            changes["end_date"] = due_date
+        elif due_date != todo["due_date"]:
+            conflicts.append({"field": "due_date", "existing": todo["due_date"], "new": due_date})
+    if priority > 0:
+        if not todo["priority"]:
+            changes["priority"] = priority
+        elif priority != todo["priority"]:
+            conflicts.append({"field": "priority", "existing": todo["priority"], "new": priority})
+    saved = _patch_task(todo_id, changes)
+    if isinstance(saved, dict):
+        return saved
+    if not saved.ok:
+        return _request_error(saved)
+    return {"status": "success", "todo": _simplify_todo(saved.json()), "merged": details, "conflicts": conflicts}
+
+def merge_todos(source_id: int, target_id: int) -> dict:
+    """Folds a duplicate to-do into the one it repeats, then deletes it. Only ever
+    reached by the user tapping the offer, since deciding two to-dos are the same thing
+    is theirs to make."""
+    if not vikunja_enabled():
+        return _disabled_error()
+    if source_id == target_id:
+        return {"status": "error", "tool": "vikunja", "message": "A to-do can't be merged into itself."}
+    source = get_todo(source_id)
+    if source.get("status") != "success":
+        return source
+    duplicate = source["todo"]
+    text = _user_description_text(duplicate["description"])
+    details = f"also written down as “{duplicate['title']}”" + (f": {text}" if text else "")
+    merged = merge_into_todo(target_id, details, due_date=duplicate["due_date"], priority=duplicate["priority"])
+    if merged.get("status") != "success":
+        return merged
+    removed = delete_todo(source_id)
+    if removed.get("status") != "success":
+        return removed
+    return {
+        "status": "success",
+        "todo": merged["todo"],
+        "merged_title": duplicate["title"],
+        "removed_todo_id": source_id,
+        "conflicts": merged["conflicts"],
+    }
+
+def queue_merge_offer(source_id: int, target_id: int, target_title: str) -> None:
+    """The same pair is never offered twice: a failed announcement leaves the to-dos
+    unseen and the watcher finds them again on the next pass, which would otherwise
+    stack the same button up on one message."""
+    state = _read_state()
+    pending = (state.get("pending_merges") or [])[-10:]
+    if any(merge["source"] == source_id and merge["target"] == target_id for merge in pending):
+        return
+    state["pending_merges"] = pending + [{"source": source_id, "target": target_id, "title": target_title}]
+    _write_state(state)
+
+def pop_pending_merges(limit: int = 2) -> list[dict]:
+    state = _read_state()
+    merges = state.get("pending_merges") or []
+    if merges:
+        state["pending_merges"] = merges[limit:]
+        _write_state(state)
+    return merges[:limit]
+
+def _hold_blocked_capture(capture: dict) -> None:
+    """Keeps the to-do a duplicate check refused, so 'add it anyway' is a tap rather
+    than the user typing the whole thing out a second time. This is what makes catching
+    duplicates eagerly safe: a wrong catch can never end with the thought lost."""
+    state = _read_state()
+    state["blocked_capture"] = dict(capture, at=time.time())
+    _write_state(state)
+
+def take_blocked_capture() -> dict:
+    state = _read_state()
+    capture = state.pop("blocked_capture", None)
+    if capture:
+        _write_state(state)
+        capture.pop("at", None)
+        capture.pop("offered", None)
+    return capture or {}
+
+def _blocked_capture_button() -> list[list[tuple[str, str]]]:
+    """Offers the refused capture back exactly once, and only while it is still the
+    thing being talked about. Without this the user has only the agent's word for it
+    that the to-do already exists, and no way back if it doesn't."""
+    state = _read_state()
+    capture = state.get("blocked_capture") or {}
+    if not capture or capture.get("offered") or time.time() - capture.get("at", 0) > 600:
+        return []
+    capture["offered"] = True
+    state["blocked_capture"] = capture
+    _write_state(state)
+    return [[("➕ Add it anyway", "/addtodoanyway")]]
+
+def add_todo(title: str, due_date: str = "", description: str = "", priority: int = 0, project_id: int = 0, allow_duplicate: bool = False) -> dict:
+    if not vikunja_enabled():
+        return _disabled_error()
+    similar = []
+    if dedupe_enabled() and not allow_duplicate:
+        matches = find_duplicate_todos(title, description)
+        # A dict here is Vikunja being unreachable; capture still wins over the check
+        if isinstance(matches, list):
+            duplicates = [match for match in matches if match["match"] == "duplicate"]
+            if duplicates:
+                _hold_blocked_capture({"title": title, "due_date": due_date, "description": description, "priority": priority, "project_id": project_id})
+                return {
+                    "status": "duplicate",
+                    "tool": "vikunja",
+                    "message": "This is already on the list, so nothing was added. Merge the new details into the existing to-do with merge_into_todo, or add it anyway with allow_duplicate=true if it is genuinely a different thing.",
+                    "existing": duplicates,
+                    "not_added": {"title": title, "due_date": due_date, "description": description, "priority": priority},
+                }
+            similar = matches
     payload = {"title": title, "description": description, "priority": priority}
     if due_date:
         payload["due_date"] = due_date
@@ -181,7 +469,13 @@ def add_todo(title: str, due_date: str = "", description: str = "", priority: in
     created = response.json()
     if created.get("id"):
         mark_todo_seen(created["id"])
-    return {"status": "success", "todo": _simplify_todo(created)}
+    result = {"status": "success", "todo": _simplify_todo(created)}
+    if similar:
+        # Close, but not close enough to hold the capture back: capturing is the win,
+        # and the user is the one who knows whether these are the same errand
+        result["similar"] = similar
+        result["similar_hint"] = "Added. These look related though, so mention in one short sentence that they are already on the list and let the user decide."
+    return result
 
 def _all_tasks() -> list[dict] | dict:
     """Every task, paged until exhausted. list_todos deliberately reads one page because
@@ -571,13 +865,18 @@ def pop_pending_drops(limit: int = 3) -> list[dict]:
 
 def todo_action_buttons() -> list[list[tuple[str, str]]] | None:
     """Every offer raised while composing the message being sent: undo a rename, drop
-    something triage doubts. They ride on the message that announced them, so acting on
-    one is a tap rather than a task the user has to remember to come back to."""
+    something triage doubts, fold a duplicate into the to-do it repeats. They ride on
+    the message that announced them, so acting on one is a tap rather than a task the
+    user has to remember to come back to."""
     drops = [
         [(f"🗑 Drop: {drop['title'][:22]}", f"/deletetodo {drop['id']}")]
         for drop in pop_pending_drops()
     ]
-    return (undo_title_buttons() or []) + drops or None
+    merges = [
+        [(f"🔗 Merge into: {merge['title'][:18]}", f"/mergetodo {merge['source']} {merge['target']}")]
+        for merge in pop_pending_merges()
+    ]
+    return (undo_title_buttons() or []) + drops + merges + _blocked_capture_button() or None
 
 def configure_triage_projects() -> dict:
     """Creates the tags and a project per box, then retires the old Eisenhower view.

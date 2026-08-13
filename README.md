@@ -158,6 +158,7 @@ To-dos (Vikunja):
 - Optional: `VIKUNJA_DAILY_FOCUS_HOUR` (24h UTC hour, -1 disables) sends one gentle morning message with up to 3 to-dos that matter today and a suggested starter — never the whole list.
 - Optional: `VIKUNJA_DATE_NUDGE_HOUR` (24h UTC hour, -1 disables) sends one daily message listing to-dos without a due date; reply with rough dates ("friday", "next week") and the agent sets them, keeping Vikunja's Gantt timeline useful.
 - Optional: with `ENABLE_TODO_TRIAGE=true` every incoming to-do is sorted into the four urgent/important boxes and labelled with what else is true about it; run `/triagesetup` once to create the tags and a project per box. `VIKUNJA_DEFAULT_PROJECT_ID` then means strictly the unsorted Inbox. A weekly message reports how the boxes are shifting, on the same `WEEKLY_REVIEW_DAY` schedule as the stale sweep.
+- Optional: with `ENABLE_TODO_DEDUPE=true` the same thing written down twice stops becoming two to-dos. Every capture is matched against the whole list first — on meaning, not on wording, so "dentist" finds "Call the dentist about the cleaning" and accents, plurals and typos don't hide a match. When one already exists nothing is created: the agent merges whatever the second telling added (a detail, a date, a name, a better phrasing) into the to-do you already have as a dated line, or just tells you where it already is. A to-do you finished in the last `TODO_DUPLICATE_DONE_DAYS` still counts, so a chore you just did doesn't quietly come back. `TODO_DUPLICATE_THRESHOLD` (0 to 1, defaults to 0.55) sets how alike two to-dos have to read; it leans towards catching too much rather than too little, because the refused capture is always offered straight back with an **Add it anyway** button. To-dos written directly in Vikunja are checked too, and come with a **Merge into** button instead, since by then the second one exists.
 - Optional: with `ENABLE_VIKUNJA_SUBTASKS=true` the agent breaks multi-step to-dos into steps (on its own or when asked), written as a tickable checklist inside that to-do's own description. The steps stay inside the task rather than becoming separate to-dos, so the list never gets longer — a list that doubles in length is the thing that makes you stop opening it. Tick the boxes in the Vikunja app and the to-do's progress bar fills on its own.
 
 ```code
@@ -167,6 +168,7 @@ To-dos (Vikunja):
 /listtodos all - list all to-dos including done ones
 /donetodo 12 - mark to-do with id 12 as done
 /deletetodo 12 - delete to-do with id 12
+/mergetodo 31 12 - fold to-do 31 into to-do 12 and remove the duplicate
 ```
 
 Knowledge base (AppFlowy):

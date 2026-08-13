@@ -12,15 +12,26 @@ from connectors.vikunja_connector import (
     rename_todo as connector_rename_todo,
     list_todo_projects as connector_list_todo_projects,
     triage_todo as connector_triage_todo,
+    find_duplicate_todos as connector_find_duplicate_todos,
+    merge_into_todo as connector_merge_into_todo,
     comments_enabled,
+    dedupe_enabled,
     retitle_enabled,
     subtasks_enabled,
     triage_enabled,
 )
 
-def add_todo(title: str, due_date: str = "", description: str = "", priority: int = 0, project_id: int = 0) -> dict:
+def add_todo(title: str, due_date: str = "", description: str = "", priority: int = 0, project_id: int = 0, allow_duplicate: bool = False) -> dict:
     notify_tool_use(f"🔧✅➕ Vikunja tool used to add to-do '{title}'.")
-    return connector_add_todo(title, due_date, description, priority, project_id)
+    return connector_add_todo(title, due_date, description, priority, project_id, allow_duplicate)
+
+def find_similar_todos(text: str) -> list[dict] | dict:
+    notify_tool_use(f"🔧✅🔁 Vikunja tool used to look for to-dos already covering '{text}'.")
+    return connector_find_duplicate_todos(text)
+
+def merge_into_todo(todo_id: int, details: str, due_date: str = "", priority: int = 0) -> dict:
+    notify_tool_use(f"🔧✅🔗 Vikunja tool used to merge new details into to-do {todo_id}.")
+    return connector_merge_into_todo(todo_id, details, due_date, priority)
 
 def list_todos(include_done: bool = False) -> list[dict] | dict:
     notify_tool_use(f"🔧✅🔍 Vikunja tool used to list to-dos.")
@@ -70,7 +81,7 @@ add_todo_tool = {
     "type": "function",
     "function": {
         "name": "add_todo",
-        "description": "Add a to-do item to the user's Vikunja to-do list. Use this for things the user wants to remember to do, like shopping items, chores, or errands. Add it immediately with sensible defaults instead of asking clarifying questions first; details can always be added later.",
+        "description": "Add a to-do item to the user's Vikunja to-do list. Use this for things the user wants to remember to do, like shopping items, chores, or errands. Add it immediately with sensible defaults instead of asking clarifying questions first; details can always be added later. The list is checked for a to-do that already covers this first: if one exists nothing is created and the result comes back as status 'duplicate' with the existing to-do, for you to merge into or override.",
         "parameters": {
             "type": "object",
             "properties": {
@@ -93,6 +104,10 @@ add_todo_tool = {
                 "project_id": {
                     "type": "integer",
                     "description": "Optional Vikunja project id. Almost always leave this as 0: new to-dos belong in the Inbox, and triage_todo is what moves one into a box. Use list_todo_projects to find project ids.",
+                },
+                "allow_duplicate": {
+                    "type": "boolean",
+                    "description": "Leave false. The list is checked for a to-do that already says this, and if one is found nothing is added and it comes back as status 'duplicate' with the existing to-do. Only set this true to add anyway, after seeing that match and judging it a genuinely different thing, or when the user says to add it regardless.",
                 },
             },
             "required": ["title"],
@@ -376,6 +391,68 @@ if triage_enabled():
                     },
                 },
                 "required": ["todo_id", "quadrant"],
+            },
+        },
+    }
+
+if dedupe_enabled():
+    find_similar_todos_tool = {
+        "type": "function",
+        "function": {
+            "name": "find_similar_todos",
+            "description": (
+                "Look for to-dos that already cover something, matched on meaning rather than exact words, so a thought written down twice "
+                "in two different phrasings still finds itself. Each result comes back with a score and a match of 'duplicate' (treat as the "
+                "same thing) or 'similar' (worth naming, nothing more). Use it when the user asks whether they already noted something, when "
+                "they describe work that sounds familiar, or before writing several to-dos at once. add_todo runs this check on its own, so "
+                "there is no need to call it first for a single ordinary capture."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "text": {
+                        "type": "string",
+                        "description": "What the user wants to do, in their own words. A title or a sentence, both work.",
+                    },
+                },
+                "required": ["text"],
+            },
+        },
+    }
+
+    merge_into_todo_tool = {
+        "type": "function",
+        "function": {
+            "name": "merge_into_todo",
+            "description": (
+                "Fold a second capture of something already on the list into the to-do that holds it, instead of creating a near copy. Use "
+                "this when add_todo comes back as 'duplicate' and the user gave something the existing to-do doesn't have: a detail, a "
+                "constraint, a date, a name, a different way of saying it. If they gave nothing new, don't call this at all, just tell them "
+                "it's already there and where. The details are appended as a dated line, so nothing already on the task is lost. A due date "
+                "or priority is only filled in when the to-do has none; when it already has a different one, nothing is overwritten and it "
+                "comes back in 'conflicts' for you to raise with the user in one short question."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "todo_id": {
+                        "type": "integer",
+                        "description": "The id of the existing to-do to merge into, from the 'duplicate' result or find_similar_todos.",
+                    },
+                    "details": {
+                        "type": "string",
+                        "description": "Only what is actually new, in the user's own language, one line of short HTML. Include their new wording when it says something the old title doesn't.",
+                    },
+                    "due_date": {
+                        "type": "string",
+                        "description": "Optional due date as an ISO8601 UTC timestamp, if they gave one this time. Applied only when the to-do has none.",
+                    },
+                    "priority": {
+                        "type": "integer",
+                        "description": "Optional priority from 0 (unset) to 5 (urgent). Applied only when the to-do has none.",
+                    },
+                },
+                "required": ["todo_id", "details"],
             },
         },
     }

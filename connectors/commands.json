@@ -45,6 +45,10 @@
             "description": "Delete a Vikunja to-do by ID. Example: /deletetodo 12"
         },
         {
+            "command": "mergetodo",
+            "description": "Fold a duplicate to-do into the one it repeats. Example: /mergetodo 31 12 (31 goes into 12)"
+        },
+        {
             "command": "calendarauth",
             "description": "Start Google Calendar OAuth and get a clickable auth link"
         },

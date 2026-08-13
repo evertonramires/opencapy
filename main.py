@@ -19,7 +19,9 @@ from connectors.vikunja_connector import (
     comments_enabled,
     daily_dateless_todos,
     daily_focus_todos,
+    duplicates_for_new_todos,
     get_todo,
+    queue_merge_offer,
     mark_balance_sent,
     mark_comments_seen,
     mark_date_nudge_sent,
@@ -207,10 +209,24 @@ if __name__ == "__main__":
                                     "'not-needed', say so gently and leave it entirely up to them, a button will be offered and you must not delete "
                                     "anything yourself. If it comes out 'two-minute', say it's probably faster to just do than to plan. "
                                 ) if triage_enabled() else ""
+                                # A to-do written straight into Vikunja never passes the check
+                                # add_todo does, so the same thought lands twice under two
+                                # different titles and the list quietly stops being trusted
+                                repeats = duplicates_for_new_todos(new_todos)
+                                for new_id, matches in repeats.items():
+                                    queue_merge_offer(new_id, matches[0]["todo"]["id"], matches[0]["todo"]["title"])
+                                duplicate_hint = (
+                                    "Some of these look like things already on the list: "
+                                    f"{json.dumps({new_id: [match['todo'] for match in matches] for new_id, matches in repeats.items()})}. "
+                                    "Say so plainly in one sentence, naming the older to-do so they can recognise it, and leave the decision "
+                                    "to them: a merge button is offered on this message. Never merge or delete anything yourself, and don't "
+                                    "imply they should have remembered. "
+                                ) if repeats else ""
                                 response = deferred_prompt(
                                     "[system] The user just added these to-dos directly in Vikunja (not through you): "
                                     f"{json.dumps(new_todos)}. Acknowledge them in one or two friendly sentences, mentioning the titles. "
                                     "Capturing the thought was the win, so don't demand decisions. "
+                                    f"{duplicate_hint}"
                                     f"{retitle_hint}"
                                     f"{triage_hint}"
                                     f"{breakdown_hint}"

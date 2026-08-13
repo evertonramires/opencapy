@@ -22,7 +22,9 @@ from connectors.vikunja_connector import (
     complete_todo,
     delete_todo,
     get_todo,
+    merge_todos,
     restore_todo_title,
+    take_blocked_capture,
     retitle_enabled,
     set_todo_quadrant,
     todo_action_buttons,
@@ -174,10 +176,57 @@ def read_messages():
                     if result.get("status") == "error":
                         send_message(f"Sorry, I couldn't add the to-do. {result.get('message')}\nDetails: {result.get('details', '')}")
                         continue
+                    if result.get("status") == "duplicate":
+                        # Nothing was created, so the way forward has to be one tap: the
+                        # capture itself is held and replayed by /addtodoanyway
+                        existing = result["existing"][0]["todo"]
+                        already_done = " (already done)" if existing.get("done") else ""
+                        send_message(
+                            f"🔁 You already have this one: {existing['id']}. {existing['title']}{already_done}\n"
+                            f"Nothing added, so it doesn't show up twice.",
+                            buttons=[[("➕ Add it anyway", "/addtodoanyway")]],
+                        )
+                        continue
                     todo = result.get("todo", {})
-                    send_message(f"✅ To-do added: {todo.get('title', todo_text)} (id: {todo.get('id')})")
+                    message_text = f"✅ To-do added: {todo.get('title', todo_text)} (id: {todo.get('id')})"
+                    if result.get("similar"):
+                        close = result["similar"][0]["todo"]
+                        message_text += f"\n🔁 Close to this one, in case it's the same thing: {close['id']}. {close['title']}"
+                    send_message(message_text)
                 except Exception as e:
                     send_message(f"Sorry, I couldn't add the to-do, can we try again? Details: {e}")
+            elif _is_command(message, "/addtodoanyway"):
+                try:
+                    capture = take_blocked_capture()
+                    if not capture:
+                        send_message("Nothing waiting to be added. Use /addtodo <title> to capture something new.")
+                        continue
+                    result = add_todo(**capture, allow_duplicate=True)
+                    if result.get("status") == "error":
+                        send_message(f"Sorry, I couldn't add the to-do. {result.get('message')}\nDetails: {result.get('details', '')}")
+                        continue
+                    todo = result.get("todo", {})
+                    send_message(f"✅ To-do added: {todo.get('title')} (id: {todo.get('id')})")
+                except Exception as e:
+                    send_message(f"Sorry, I couldn't add the to-do, can we try again? Details: {e}")
+            elif _is_command(message, "/mergetodo"):
+                try:
+                    source_id, target_id = (int(part) for part in message[len("/mergetodo"):].split())
+                except Exception:
+                    send_message("Usage: /mergetodo <duplicate_id> <keep_id>. Example: /mergetodo 31 12")
+                    continue
+                try:
+                    result = merge_todos(source_id, target_id)
+                    if result.get("status") != "success":
+                        send_message(f"Sorry, I couldn't merge those to-dos. {result.get('message')}\nDetails: {result.get('details', '')}")
+                        continue
+                    conflicts = "\n⚠️ Kept the dates and priority already on it: " + json.dumps(result["conflicts"]) if result["conflicts"] else ""
+                    send_message(
+                        f"🔗 Merged into {target_id}. {result['todo']['title']}\n"
+                        f"'{result['merged_title']}' is now a line on that to-do instead of a second one.{conflicts}"
+                    )
+                except Exception as e:
+                    send_message(f"Sorry, I couldn't merge those to-dos, can we try again? Details: {e}")
             elif _is_command(message, "/listtodos"):
                 try:
                     include_done = message[len("/listtodos"):].strip().lower() == "all"

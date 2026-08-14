@@ -2,6 +2,8 @@
 
 [![Support my work ❤️](https://img.shields.io/badge/Support%20my%20work%20❤️-orange?style=for-the-badge&logo=patreon&logoColor=white)](https://www.patreon.com/c/evertonics)
 
+> **Looking for the original, bare-minimum version?** This repo has grown well past the "keep it as simple as possible" scope described below. A snapshot from just before AI-assisted development started — commit `3f8495d`, the last commit authored solely by hand — lives at [evertonramires/simplecapy](https://github.com/evertonramires/simplecapy).
+
 This is a bare minimum AI agentic harness I created after giving up on openclaw cronjob not working properly. Main intent is to keep as simple as possible to be used as boiler plate for other agentic projects in the future.
 
 ## Requirements

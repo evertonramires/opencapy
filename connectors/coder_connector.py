@@ -1,6 +1,8 @@
+import glob
 import json
 import os
 import re
+import signal
 import subprocess
 import threading
 from datetime import datetime, timezone
@@ -12,9 +14,11 @@ CODER_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "hood", "c
 # The coding agent runs with real shell access and no permission prompts, so nothing
 # here ever starts on the agent's own initiative: an offer is a button, and the button
 # is the user. One job at a time keeps the machine, the usage window and the blast
-# radius all readable.
+# radius all readable. The process handle is held so the panic button has something
+# to kill; "stopped" marks a kill as deliberate, so the thread doesn't report a stop
+# the user asked for as a failure.
 _running_lock = threading.Lock()
-_running = {"active": False}
+_running = {"active": False, "job": None, "process": None, "stopped": False}
 
 CODING_SYSTEM_PROMPT = (
     "You are a coding agent working for the user's personal assistant, Capy. You have a real shell on the "
@@ -168,6 +172,8 @@ def start_next_coding_job(send_message) -> bool:
         job["started_at"] = _now()
         _write_state(state)
         _running["active"] = True
+        _running["job"] = job
+        _running["stopped"] = False
     thread = threading.Thread(target=_run_coding_job, args=(job, send_message), daemon=True)
     thread.start()
     return True
@@ -188,11 +194,98 @@ def _finish(job_id: int, status: str) -> None:
     else:
         for j in state.get("queue", []):
             if j["id"] == job_id:
-                j["status"] = "failed"
-                j["failed_at"] = _now()
+                j["status"] = status
+                j[f"{status}_at"] = _now()
     _write_state(state)
     with _running_lock:
         _running["active"] = False
+        _running["job"] = None
+        _running["process"] = None
+        _running["stopped"] = False
+
+
+def _job_dir_of(job_id: int) -> str:
+    matches = glob.glob(os.path.join(_workdir(), f"job-{job_id}-*"))
+    return matches[0] if matches else ""
+
+
+def _workdir_snapshot(job_id: int) -> list[str]:
+    """What the job's workdir holds, for the stopped-work report. Local files are the
+    part of the state that can be listed mechanically; anything done over ssh can only
+    be named as unknown, never guessed at."""
+    root = _job_dir_of(job_id)
+    if not root:
+        return []
+    files = []
+    for base, _, names in os.walk(root):
+        for name in names:
+            files.append(os.path.relpath(os.path.join(base, name), root))
+    return sorted(files)[:20]
+
+
+def stop_coding_work(todo_id: int = 0) -> dict:
+    """The panic button. Withdraws an offer, cancels a queued job, or kills the running
+    one — whichever this to-do is at; with no id, kills whatever is running. Killing is
+    mechanical (SIGTERM to the process group, no model in the loop) and the caller gets
+    the facts for the status comment: how long it ran, what its workdir holds, and that
+    remote state over ssh is unknown rather than pretended clean."""
+    if not coder_enabled():
+        return {"status": "error", "tool": "coder", "message": "The coding agent is disabled."}
+    state = _read_state()
+    # A running job outranks everything else the to-do might also have
+    with _running_lock:
+        job = _running["job"]
+        if _running["active"] and job and (not todo_id or job["todo_id"] == todo_id):
+            _running["stopped"] = True
+            process = _running["process"]
+            if process:
+                try:
+                    os.killpg(os.getpgid(process.pid), signal.SIGTERM)
+                except Exception:
+                    pass
+            started = job.get("started_at", "")
+            minutes = 0
+            try:
+                begun = datetime.strptime(started, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+                minutes = int((datetime.now(timezone.utc) - begun).total_seconds() // 60)
+            except Exception:
+                pass
+            return {
+                "status": "success", "stopped": "running", "todo_id": job["todo_id"], "goal": job["goal"],
+                "minutes": minutes, "files": _workdir_snapshot(job["id"]),
+                "workdir": _job_dir_of(job["id"]),
+            }
+    if not todo_id:
+        return {"status": "error", "tool": "coder", "message": "Nothing is running."}
+    offers = state.get("offers", [])
+    if any(o["todo_id"] == todo_id for o in offers):
+        state["offers"] = [o for o in offers if o["todo_id"] != todo_id]
+        _write_state(state)
+        return {"status": "success", "stopped": "offer", "todo_id": todo_id}
+    queued = next((j for j in state.get("queue", []) if j["todo_id"] == todo_id and j.get("status") == "queued"), None)
+    if queued:
+        state["queue"] = [j for j in state.get("queue", []) if j["id"] != queued["id"]]
+        _write_state(state)
+        return {"status": "success", "stopped": "queued", "todo_id": todo_id, "goal": queued["goal"]}
+    return {"status": "error", "tool": "coder", "message": f"No coding offer, queued job or running job found for to-do {todo_id}."}
+
+
+def stop_report_html(result: dict) -> str:
+    """The status comment the stop leaves on the task, built from facts only. An agent
+    interrupted mid-thought can't be asked what it finished, so the report never claims
+    to know — it says what ran, what's on disk, and what to double-check."""
+    if result["stopped"] == "offer":
+        return "<p>⏹ Stopped: the coding offer was withdrawn before anything ran. Nothing was changed.</p>"
+    if result["stopped"] == "queued":
+        return f"<p>⏹ Stopped: the queued coding job ({result['goal']}) was cancelled before it started. Nothing was changed.</p>"
+    files = "".join(f"<li>{name}</li>" for name in result["files"])
+    files_block = f"<p>Files in its working directory:</p><ul>{files}</ul>" if files else "<p>Its working directory has no files.</p>"
+    return (
+        f"<p>⏹ Stopped the coding agent after {result['minutes']} minute(s), mid-task: {result['goal']}</p>"
+        f"{files_block}"
+        "<p>It was interrupted, so treat the state as unfinished: anything it may have done over ssh or outside its "
+        "working directory isn't captured here and is worth a look before relying on it.</p>"
+    )
 
 
 def _run_coding_job(job: dict, send_message) -> None:
@@ -225,17 +318,36 @@ def _run_coding_job(job: dict, send_message) -> None:
         environment = dict(os.environ)
         # Without this the CLI bills an API key instead of using the logged in subscription
         environment.pop("ANTHROPIC_API_KEY", None)
-        result = subprocess.run(
+        # Popen in its own session rather than run(): the panic button kills the whole
+        # process group, ssh children included, and a handle is what it kills by
+        process = subprocess.Popen(
             command,
-            capture_output=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
             text=True,
             cwd=_job_workdir(job, title),
             env=environment,
-            timeout=int(os.getenv("CODER_TIMEOUT_SECONDS", "3600")),
+            start_new_session=True,
         )
-        if not result.stdout.strip():
-            raise RuntimeError(result.stderr.strip() or f"claude exited with code {result.returncode}")
-        data = json.loads(result.stdout)
+        with _running_lock:
+            if _running["stopped"]:
+                # The stop landed between spawn and registration; honour it
+                os.killpg(os.getpgid(process.pid), signal.SIGTERM)
+            _running["process"] = process
+        try:
+            stdout, stderr = process.communicate(timeout=int(os.getenv("CODER_TIMEOUT_SECONDS", "3600")))
+        except subprocess.TimeoutExpired:
+            os.killpg(os.getpgid(process.pid), signal.SIGKILL)
+            process.communicate()
+            raise RuntimeError(f"timed out after {os.getenv('CODER_TIMEOUT_SECONDS', '3600')}s")
+        if _running["stopped"]:
+            # The user pulled the plug; the stop path owns the messaging and the
+            # status comment, this thread only tidies the state
+            _finish(job["id"], "stopped")
+            return
+        if not stdout.strip():
+            raise RuntimeError(stderr.strip() or f"claude exited with code {process.returncode}")
+        data = json.loads(stdout)
         if data.get("is_error"):
             raise RuntimeError(data.get("result"))
         report = data["result"].strip()
@@ -248,5 +360,8 @@ def _run_coding_job(job: dict, send_message) -> None:
         _finish(job["id"], "done")
         send_message(f"🧑‍💻 Done with '{title}':\n{report}")
     except Exception as e:
+        if _running["stopped"]:
+            _finish(job["id"], "stopped")
+            return
         _finish(job["id"], "failed")
         send_message(f"🧑‍💻 The coding agent hit a wall on to-do {job['todo_id']}: {e}")

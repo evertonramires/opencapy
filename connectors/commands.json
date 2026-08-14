@@ -209,6 +209,10 @@
             "description": "Start the offered Claude Code agent on a to-do. Example: /aicode 12"
         },
         {
+            "command": "stopcode",
+            "description": "Panic button: stop the coding agent (or a queued job/offer). Example: /stopcode or /stopcode 12"
+        },
+        {
             "command": "journal",
             "description": "Show a day's journal: the 3-task plan and the wins. Example: /journal 2026-08-14"
         },

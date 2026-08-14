@@ -32,6 +32,8 @@ from connectors.vikunja_connector import (
     mark_stale_sweep_sent,
     mark_todos_done,
     mark_todos_seen,
+    add_todo_comment,
+    plain_comment_text,
     pomodoro_enabled,
     retitle_enabled,
     subtasks_enabled,
@@ -42,8 +44,8 @@ from connectors.vikunja_connector import (
     weekly_stale_todos,
     weekly_wins,
 )
-from connectors.autopilot_connector import autopilot_enabled, fail_job, finish_job, next_job
-from connectors.coder_connector import coder_enabled, start_next_coding_job, sweep_interrupted_jobs
+from connectors.autopilot_connector import autopilot_enabled, cancel_work, fail_job, finish_job, next_job, queue_work
+from connectors.coder_connector import accept_coding_offer, coder_enabled, start_next_coding_job, stop_coding_work, stop_report_html, sweep_interrupted_jobs
 from connectors.journal_connector import evening_journal_due, get_plan, journal_enabled, mark_evening_sent
 from connectors.approval_connector import expired_approvals
 from connectors.sprint_connector import due_sprints, mark_checked_in
@@ -298,6 +300,38 @@ if __name__ == "__main__":
                                     print(f"⚠️ Vikunja comments: {comment_updates.get('message')}")
                                 for thread in comment_updates.get("threads", []):
                                     todo = thread["todo"]
+                                    # /start and /stop are comment commands, matched here
+                                    # mechanically: no model ever sits between the user's
+                                    # panic button and the kill, or between their go and
+                                    # the shell-holding agent starting
+                                    commands = {plain_comment_text(c).strip().lower() for c in thread["new_comments"]}
+                                    if "/stop" in commands:
+                                        stopped = stop_coding_work(todo["id"])
+                                        research_cancelled = cancel_work(todo["id"])
+                                        if stopped.get("status") == "success":
+                                            add_todo_comment(todo["id"], stop_report_html(stopped))
+                                            send_message(f"⏹ Stopped the coding work on '{todo['title']}', status is in the task's comments.")
+                                        elif research_cancelled:
+                                            add_todo_comment(todo["id"], "<p>⏹ Stopped: the queued research was cancelled before it ran. Nothing was changed.</p>")
+                                            send_message(f"⏹ Cancelled the queued research on '{todo['title']}'.")
+                                        else:
+                                            add_todo_comment(todo["id"], "<p>⏹ Nothing was running or queued for this task.</p>")
+                                        mark_comments_seen(todo["id"], thread["seen"])
+                                        continue
+                                    if "/start" in commands:
+                                        accepted = accept_coding_offer(todo["id"])
+                                        if accepted.get("status") == "success":
+                                            started = start_next_coding_job(send_message)
+                                            note = "started" if started else "queued and starts as soon as there's room"
+                                            add_todo_comment(todo["id"], f"<p>🧑‍💻 Coding agent {note}: {accepted['goal']}</p><p>Comment /stop here to pull the plug.</p>")
+                                            send_message(f"🧑‍💻 Coding agent {note} on '{todo['title']}'.")
+                                        elif autopilot_enabled():
+                                            queue_work(todo["id"], "Advance this to-do as far as you can alone: research what is needed and write your findings into it.")
+                                            add_todo_comment(todo["id"], "<p>🔎 On it — I'll write what I find into this task. Comment /stop to cancel.</p>")
+                                        else:
+                                            add_todo_comment(todo["id"], "<p>There's no coding offer on this task and autopilot is off, so nothing to start.</p>")
+                                        mark_comments_seen(todo["id"], thread["seen"])
+                                        continue
                                     response = deferred_prompt(
                                         "[system] The user just commented on one of their own to-dos in Vikunja. They are steering this task, "
                                         "so treat the comment as an instruction about it and act on it, don't just acknowledge.\n\n"

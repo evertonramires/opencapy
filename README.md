@@ -362,8 +362,24 @@ ssh aliases, what lives where) and set up the SSH keys yourself, once — the ag
 uses hosts the notes name. A job interrupted by a restart goes back in the queue and
 says so.
 
+You can also drive it from inside Vikunja, by commenting on the task itself. These two
+comments are matched **mechanically** by the watcher — no model sits between you and
+them, which is what makes them safe as a start switch and a panic button (they act on
+the watcher's next pass, so within `VIKUNJA_WATCH_INTERVAL_SECONDS`; from Telegram,
+`/stopcode` is immediate):
+
+- comment `/start` — starts the offered coding agent on that task, or queues research
+  when there's no coding offer
+- comment `/stop` — the panic button: kills the running agent (its whole process
+  group, ssh sessions included), or cancels the queued job, offer, or queued research.
+  It leaves a status comment on the task with how long it ran and what its working
+  directory holds, and is explicit that interrupted work — especially anything over
+  ssh — should be checked, not trusted
+
 ```code
 /aicode 12 - start the offered coding agent on to-do 12
+/stopcode - stop whatever coding job is running right now
+/stopcode 12 - stop or cancel the coding work on to-do 12
 ```
 
 Journal (`ENABLE_JOURNAL=true`):

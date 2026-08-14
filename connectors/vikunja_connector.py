@@ -674,6 +674,12 @@ def _write_steps_block(description: str, titles: list[str]) -> str:
 def _is_capy_comment(comment: str) -> bool:
     return _capy_comment_marker in comment or _capy_comment_header in comment
 
+def plain_comment_text(comment_html: str) -> str:
+    """A comment as the user typed it, markup stripped. The watcher matches comment
+    commands like /start and /stop against this, mechanically — the whole point of a
+    comment command is that no model sits between typing it and it happening."""
+    return _plain_text(comment_html)
+
 def list_todo_comments(todo_id: int) -> dict:
     """The conversation held on the to-do itself, oldest first, each flagged with
     whether Capy or the user wrote it."""

@@ -17,6 +17,7 @@ from connectors.calendar_connector import (
 )
 from connectors.vikunja_connector import (
     add_todo,
+    add_todo_comment,
     configure_triage_projects,
     list_todos,
     complete_todo,
@@ -35,7 +36,7 @@ from connectors.vikunja_connector import (
     update_todo,
 )
 from connectors.autopilot_connector import autopilot_enabled, read_queue, remaining_today
-from connectors.coder_connector import accept_coding_offer, coder_enabled, start_next_coding_job
+from connectors.coder_connector import accept_coding_offer, coder_enabled, start_next_coding_job, stop_coding_work, stop_report_html
 from connectors.journal_connector import journal_enabled, read_journal
 from connectors.sprint_connector import (
     default_minutes,
@@ -605,6 +606,17 @@ def read_messages():
                         send_message(f"🧑‍💻 Queued: {result['goal']}\nAnother job is running or today's runs are spent; it starts as soon as there's room.")
                 except Exception as e:
                     send_message(f"Usage: /aicode <todo_id>. Details: {e}")
+            elif _is_command(message, "/stopcode"):
+                try:
+                    raw = message[len("/stopcode"):].strip()
+                    result = stop_coding_work(int(raw) if raw else 0)
+                    if result.get("status") != "success":
+                        send_message(f"⏹ {result.get('message')}")
+                        continue
+                    add_todo_comment(result["todo_id"], stop_report_html(result))
+                    send_message(f"⏹ Stopped ({result['stopped']}). Status is in the task's comments.")
+                except Exception as e:
+                    send_message(f"Usage: /stopcode [todo_id] — no id stops whatever is running. Details: {e}")
             elif _is_command(message, "/journal"):
                 try:
                     if not journal_enabled():

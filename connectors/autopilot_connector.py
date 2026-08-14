@@ -109,6 +109,19 @@ def fail_job(job_id: int) -> bool:
     return dropped
 
 
+def cancel_work(todo_id: int) -> bool:
+    """Drops any queued research for a to-do. The /stop comment reaches here so the
+    panic button covers both kinds of AI work, not just the one holding a shell."""
+    state = _read_state()
+    queue = state.get("queue", [])
+    remaining = [job for job in queue if job["todo_id"] != todo_id]
+    if len(remaining) == len(queue):
+        return False
+    state["queue"] = remaining
+    _write_state(state)
+    return True
+
+
 def remaining_today() -> int:
     state = _roll_day(_read_state())
     return max(0, max_per_day() - state.get("done_today", 0))

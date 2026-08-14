@@ -21,6 +21,8 @@ from connectors.vikunja_connector import (
     daily_focus_todos,
     duplicates_for_new_todos,
     get_todo,
+    instant_ack_enabled,
+    list_todos,
     queue_merge_offer,
     mark_balance_sent,
     mark_comments_seen,
@@ -41,13 +43,15 @@ from connectors.vikunja_connector import (
     weekly_wins,
 )
 from connectors.autopilot_connector import autopilot_enabled, fail_job, finish_job, next_job
+from connectors.coder_connector import coder_enabled, start_next_coding_job, sweep_interrupted_jobs
+from connectors.journal_connector import evening_journal_due, get_plan, journal_enabled, mark_evening_sent
 from connectors.approval_connector import expired_approvals
 from connectors.sprint_connector import due_sprints, mark_checked_in
 from connectors.usage_connector import buffering_active, usage_alert_message
 from connectors.buffer_connector import add_buffered, delete_buffered, due_buffered, read_buffered
 from agent import prompt
 from connectors.chat_connector import register_commands, send_message, read_messages
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 heartbeat_interval_seconds = int(os.getenv("HEARTBEAT_INTERVAL_SECONDS", 10))
@@ -105,6 +109,8 @@ if __name__ == "__main__":
             "hood/buffer.json": '{"items": []}',
             "hood/approvals.json": '{"approvals": []}',
             "hood/autopilot.json": '{"queue": []}',
+            "hood/coder.json": '{"offers": [], "queue": []}',
+            "hood/journal.json": '{"days": {}}',
             "hood/sprints.json": '{"sprints": []}',
             "hood/claude_code.json": '{"model": "", "effort": "", "notified_for_reset": 0}',
             "hood/notebook.md": "",
@@ -124,6 +130,10 @@ if __name__ == "__main__":
                     f.write(default)
 
         register_commands()
+        # A coding job still marked running was killed with the process; requeue it
+        # rather than letting silence read as the work having happened
+        for interrupted in sweep_interrupted_jobs():
+            send_message(f"🧑‍💻 The coding job for to-do {interrupted['todo_id']} was interrupted by a restart, I've put it back in the queue.")
         try:
             subprocess.Popen([sys.executable, "-m", "uvicorn", "api.api:app", "--host", chat_api_bind_host, "--port", chat_api_bind_port], stdout=subprocess.DEVNULL)
         except Exception as e:
@@ -191,11 +201,17 @@ if __name__ == "__main__":
                                     "isn't obvious, don't guess, just acknowledge. "
                                 ) if subtasks_enabled() else ""
                                 # Triage rides along with the acknowledgement instead of costing a second call
+                                coder_hint = (
+                                    "If instead it needs writing or changing code, a repo, shell commands, or one of the user's machines, call "
+                                    "offer_coding_work with one concrete sentence of the outcome — that only raises a button, the user starts it, "
+                                    "and you must never present it as already running. "
+                                ) if coder_enabled() else ""
                                 autopilot_hint = (
                                     "If you could genuinely move one of these forward on your own, finding a phone number or address, checking opening "
                                     "hours, comparing options or prices, gathering links, drafting a message, then call queue_task_work with its id and "
                                     "exactly what you will find out, and say in a few words that you're on it. Only for research you can really do alone, "
                                     "not for anything needing their body, wallet or personal choice. "
+                                    f"{coder_hint}"
                                 ) if autopilot_enabled() else ""
                                 retitle_hint = (
                                     "A title jotted down in a hurry is often a vague noun the user has to re-decide every time they see it. "
@@ -230,10 +246,21 @@ if __name__ == "__main__":
                                     "to them: a merge button is offered on this message. Never merge or delete anything yourself, and don't "
                                     "imply they should have remembered. "
                                 ) if repeats else ""
+                                # The friendly hello is optional: with it off, the same assessment
+                                # happens but the message is one compact line per task, sent only
+                                # once the work is done — a receipt, not a conversation
+                                opening = (
+                                    "Acknowledge them in one or two friendly sentences, mentioning the titles. "
+                                    "Capturing the thought was the win, so don't demand decisions. "
+                                ) if instant_ack_enabled() else (
+                                    "Assess them silently with the tools named below, then reply with exactly one compact line per task — "
+                                    "the box, the action, the estimate, anything you queued or offered — no greeting, no praise, and no "
+                                    "questions unless something is genuinely blocking. "
+                                )
                                 response = deferred_prompt(
                                     "[system] The user just added these to-dos directly in Vikunja (not through you): "
-                                    f"{json.dumps(new_todos)}. Acknowledge them in one or two friendly sentences, mentioning the titles. "
-                                    "Capturing the thought was the win, so don't demand decisions. "
+                                    f"{json.dumps(new_todos)}. "
+                                    f"{opening}"
                                     f"{duplicate_hint}"
                                     f"{retitle_hint}"
                                     f"{triage_hint}"
@@ -298,22 +325,68 @@ if __name__ == "__main__":
                         if not focus_todos:
                             mark_focus_sent()
                         else:
-                            response = deferred_prompt(
-                                "[system] Morning focus time. These are the user's pending to-dos: "
-                                f"{json.dumps(focus_todos)}. Pick at most 6 for today and list them in the order they should be done, hardest "
-                                "first, so the one they'd most like to avoid is at the top and everything after it feels easier. Prefer the "
-                                "ones due or overdue, then the ones labelled as urgent and important, then the important but not urgent ones, "
-                                "which are the easiest to keep postponing forever. Then suggest exactly one to start with, with a first step so "
-                                "small it takes two minutes. Be brief, warm and encouraging. Never mention how many tasks are pending in total, "
-                                "never guilt about overdue ones, and don't explain why you ordered them that way.",
-                                "daily focus",
-                            )
+                            todays_plan = get_plan(datetime.now(timezone.utc).date().isoformat()) if journal_enabled() else {"plan": []}
+                            if todays_plan["plan"]:
+                                # The user chose these last night; the morning message is a
+                                # reminder of their own decision, not a fresh negotiation
+                                focus_prompt = (
+                                    "[system] Morning focus time. Last night the user chose these as the first things for today: "
+                                    f"{json.dumps(todays_plan['plan'])}. Their pending to-dos, for context: {json.dumps(focus_todos)}. "
+                                    "Remind them of their three in the order they gave, then suggest starting with the first, with a first "
+                                    "step so small it takes two minutes. Be brief, warm and encouraging — these are their own picks, so no "
+                                    "reshuffling, no additions, no guilt."
+                                )
+                            elif journal_enabled():
+                                focus_prompt = (
+                                    "[system] Morning focus time, and the user didn't answer last night's journal ask, which is completely "
+                                    f"fine. Their pending to-dos: {json.dumps(focus_todos)}. Pick exactly 3 for today — due or overdue first, "
+                                    "then urgent and important, then the important but not urgent ones that are easiest to postpone forever — "
+                                    "and record them with record_today_plan with chosen_by_capy set true. Then list the three, say in one "
+                                    "light clause that you picked since they were away, and suggest starting with the first, with a first step "
+                                    "so small it takes two minutes. Warm, brief, zero guilt."
+                                )
+                            else:
+                                focus_prompt = (
+                                    "[system] Morning focus time. These are the user's pending to-dos: "
+                                    f"{json.dumps(focus_todos)}. Pick at most 6 for today and list them in the order they should be done, hardest "
+                                    "first, so the one they'd most like to avoid is at the top and everything after it feels easier. Prefer the "
+                                    "ones due or overdue, then the ones labelled as urgent and important, then the important but not urgent ones, "
+                                    "which are the easiest to keep postponing forever. Then suggest exactly one to start with, with a first step so "
+                                    "small it takes two minutes. Be brief, warm and encouraging. Never mention how many tasks are pending in total, "
+                                    "never guilt about overdue ones, and don't explain why you ordered them that way."
+                                )
+                            response = deferred_prompt(focus_prompt, "daily focus")
                             if response.startswith("⚠️ Failed communicating"):
                                 print("⚠️ Vikunja focus: LLM unavailable, will retry on the next heartbeat.")
                             else:
                                 if response:
                                     send_message(f"🎯 {response}")
                                 mark_focus_sent()
+                    evening = evening_journal_due()
+                    if isinstance(evening, dict):
+                        plan_line = (
+                            f"This morning's plan was {json.dumps(evening['todays_plan'])}; weave in one gentle sentence asking how it went. "
+                        ) if evening["todays_plan"] else ""
+                        pending = list_todos()
+                        pending_json = json.dumps(pending if isinstance(pending, list) else [])
+                        response = deferred_prompt(
+                            "[system] Evening journal time. In one short warm message, ask the user two things: which 3 tasks they want "
+                            f"to do first tomorrow — their pending to-dos, to pick from or ignore: {pending_json} — and 3 things they "
+                            f"achieved today, however small. {plan_line}"
+                            "When they answer, record with record_tomorrow_plan and record_daily_wins; partial answers count and get "
+                            "recorded too. Keep the ask to a few lines, no list of rules, no lecture, and don't use tools now.",
+                            "evening journal",
+                        )
+                        if response.startswith("⚠️ Failed communicating"):
+                            print("⚠️ Journal: LLM unavailable, will retry on the next heartbeat.")
+                        else:
+                            if response:
+                                send_message(f"📓 {response}")
+                            mark_evening_sent()
+                    if coder_enabled() and not buffering_active():
+                        # Almost always a no-op: only does anything when a tapped offer
+                        # sits queued and no job is running
+                        start_next_coding_job(send_message)
                     dateless_todos = daily_dateless_todos()
                     if isinstance(dateless_todos, list):
                         if not dateless_todos:

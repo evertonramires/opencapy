@@ -155,7 +155,7 @@ To-dos (Vikunja):
 - Create the API token in Vikunja under Settings > API Tokens, with permissions for tasks and projects — add labels and project views too if you want `ENABLE_TODO_TRIAGE`.
 - Optional: `VIKUNJA_DEFAULT_PROJECT_ID` sets the project new to-dos go to (defaults to 1, usually the Inbox).
 - Besides the manual commands below, the agent can manage to-dos on its own through the vikunja tool (add, list, complete, delete, and pick a project).
-- The agent also watches Vikunja for to-dos you add outside the bot (web/mobile app) and briefly acknowledges them, and cheers you on when you complete a to-do — wherever you tick it off. `VIKUNJA_WATCH_INTERVAL_SECONDS` controls how often it checks (defaults to 30). The first check after enabling silently marks existing to-dos as known, so only to-dos added afterwards are announced (tracked in `hood/vikunja_seen.json`).
+- The agent also watches Vikunja for to-dos you add outside the bot (web/mobile app) and briefly acknowledges them, and cheers you on when you complete a to-do — wherever you tick it off. `VIKUNJA_WATCH_INTERVAL_SECONDS` controls how often it checks (defaults to 30). With `ENABLE_TODO_INSTANT_ACK=false` the friendly hello is replaced by one compact line per task, sent only once the assessment (dedupe, triage, retitle, estimate, offers) has finished — a receipt to open Vikunja on, not a conversation. The first check after enabling silently marks existing to-dos as known, so only to-dos added afterwards are announced (tracked in `hood/vikunja_seen.json`).
 - The to-do features are designed to be ADHD-friendly: capturing is instant (no interrogation about details), and starting is helped by `/focus`, which picks exactly one to-do and suggests a first step small enough to take two minutes, offering a check-in afterwards.
 - Optional: `VIKUNJA_DAILY_FOCUS_HOUR` (24h UTC hour, -1 disables) sends one gentle morning message with up to 3 to-dos that matter today and a suggested starter — never the whole list.
 - Optional: `VIKUNJA_DATE_NUDGE_HOUR` (24h UTC hour, -1 disables) sends one daily message listing to-dos without a due date; reply with rough dates ("friday", "next week") and the agent sets them, keeping Vikunja's Gantt timeline useful.
@@ -344,6 +344,42 @@ the one small next step. Anything you wrote yourself is never overwritten.
 It only takes on things it can genuinely do alone (finding a phone number, checking
 opening hours, comparing prices, gathering links, drafting a message). It is capped at
 `AUTOPILOT_MAX_PER_DAY` and pauses entirely while the usage window is nearly spent.
+
+Coding agent (`ENABLE_CODER=true`, needs `ENABLE_CLAUDE_CODE`):
+
+The other half of the ai-can-do split. Research Capy handles itself through autopilot;
+when a to-do instead needs code written or changed, a repo, shell commands, or one of
+your machines, Capy **offers** a Claude Code agent with a button on the triage message
+— and that offer is the whole of what happens on its own. **The agent runs the real
+Claude Code CLI with shell access and permission prompts bypassed, on this machine and
+over SSH to anything `CODER_NOTES` names — which is exactly why nothing ever starts
+until you tap the button (or type `/aicode <id>`), and why `CODER_MAX_PER_DAY`
+(default 2) exists.** Jobs run one at a time on a background thread, each in its own
+subdirectory of `CODER_WORKDIR`, with `CODER_TIMEOUT_SECONDS` (default an hour) to
+finish. The report lands in the to-do under a "🧑‍💻 Coding agent" heading, in its
+comment thread, and as a chat message. Describe your machines in `CODER_NOTES` (names,
+ssh aliases, what lives where) and set up the SSH keys yourself, once — the agent only
+uses hosts the notes name. A job interrupted by a restart goes back in the queue and
+says so.
+
+```code
+/aicode 12 - start the offered coding agent on to-do 12
+```
+
+Journal (`ENABLE_JOURNAL=true`):
+
+Every evening at `JOURNAL_EVENING_HOUR` (UTC, -1 disables) Capy asks two things: which
+3 tasks you want to do first tomorrow, and 3 things you achieved today, however small.
+Answer in your own words — partial answers count. Next morning the daily focus message
+reminds you of your own three picks; if you never answered, Capy picks 3 itself and
+says so in one light clause, no guilt. Everything is kept in `hood/journal.json` and,
+when AppFlowy is on, mirrored one page per day under a "Journal" page (created if
+missing; pin a specific parent with `APPFLOWY_JOURNAL_PARENT_ID`).
+
+```code
+/journal - show today's plan and wins
+/journal 2026-08-14 - show a past day
+```
 
 Approvals:
 

@@ -35,6 +35,8 @@ from connectors.vikunja_connector import (
     update_todo,
 )
 from connectors.autopilot_connector import autopilot_enabled, read_queue, remaining_today
+from connectors.coder_connector import accept_coding_offer, coder_enabled, start_next_coding_job
+from connectors.journal_connector import journal_enabled, read_journal
 from connectors.sprint_connector import (
     default_minutes,
     end_sprint,
@@ -586,6 +588,39 @@ def read_messages():
                     send_message(f"🧭 **{result['title']}** is now tagged {result['action']}.")
                 except Exception as e:
                     send_message(f"Usage: /action <todo_id> <do|schedule|delegate|drop>. Details: {e}")
+            elif _is_command(message, "/aicode"):
+                try:
+                    if not coder_enabled():
+                        send_message("The coding agent is off. Set ENABLE_CODER=true (with ENABLE_CLAUDE_CODE=true) to turn it on.")
+                        continue
+                    todo_id = int(message[len("/aicode"):].strip())
+                    result = accept_coding_offer(todo_id)
+                    if result.get("status") != "success":
+                        send_message(f"Sorry, I couldn't start that. {result.get('message')}")
+                        continue
+                    started = start_next_coding_job(send_message)
+                    if started:
+                        send_message(f"🧑‍💻 On it: {result['goal']}\nI'll report here when it's done.")
+                    else:
+                        send_message(f"🧑‍💻 Queued: {result['goal']}\nAnother job is running or today's runs are spent; it starts as soon as there's room.")
+                except Exception as e:
+                    send_message(f"Usage: /aicode <todo_id>. Details: {e}")
+            elif _is_command(message, "/journal"):
+                try:
+                    if not journal_enabled():
+                        send_message("The journal is off. Set ENABLE_JOURNAL=true to turn it on.")
+                        continue
+                    date = message[len("/journal"):].strip()
+                    entry = read_journal(date)
+                    if entry.get("status") != "success":
+                        send_message(f"Sorry, I couldn't read the journal. {entry.get('message')}")
+                        continue
+                    chose = " (picked by me)" if entry["plan_source"] == "capy" else ""
+                    plan_text = "\n".join(f"{i+1}. {task}" for i, task in enumerate(entry["plan"])) or "—"
+                    wins_text = "\n".join(f"• {win}" for win in entry["wins"]) or "—"
+                    send_message(f"📓 {entry['date']}\nPlan{chose}:\n{plan_text}\nAchieved:\n{wins_text}")
+                except Exception as e:
+                    send_message(f"Usage: /journal [YYYY-MM-DD]. Details: {e}")
             elif _is_command(message, "/snooze"):
                 try:
                     parts = message[len("/snooze"):].strip().split()

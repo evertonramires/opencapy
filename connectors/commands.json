@@ -205,6 +205,14 @@
             "description": "Change what to do about a to-do (its do/schedule/delegate/drop tag). Example: /action 12 delegate"
         },
         {
+            "command": "aicode",
+            "description": "Start the offered Claude Code agent on a to-do. Example: /aicode 12"
+        },
+        {
+            "command": "journal",
+            "description": "Show a day's journal: the 3-task plan and the wins. Example: /journal 2026-08-14"
+        },
+        {
             "command": "triagesetup",
             "description": "Create the triage labels and the Eisenhower board in Vikunja"
         },

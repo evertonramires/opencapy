@@ -119,6 +119,12 @@ def dedupe_enabled() -> bool:
 def pomodoro_enabled() -> bool:
     return triage_enabled() and os.getenv("ENABLE_TODO_POMODORO", "false").lower() in ["true", "1", "yes"]
 
+def instant_ack_enabled() -> bool:
+    """Whether the watcher greets a new to-do with a friendly hello, or waits and
+    reports in one compact line once the assessment is done. On by default; turning
+    it off is for the user who found the hello arriving before the substance."""
+    return os.getenv("ENABLE_TODO_INSTANT_ACK", "true").lower() in ["true", "1", "yes"]
+
 def pomodoro_minutes() -> int:
     return int(os.getenv("POMODORO_MINUTES", "25"))
 
@@ -1044,9 +1050,9 @@ def pop_pending_drops(limit: int = 3) -> list[dict]:
 
 def todo_action_buttons() -> list[list[tuple[str, str]]] | None:
     """Every offer raised while composing the message being sent: undo a rename, drop
-    something triage doubts, fold a duplicate into the to-do it repeats. They ride on
-    the message that announced them, so acting on one is a tap rather than a task the
-    user has to remember to come back to."""
+    something triage doubts, fold a duplicate into the to-do it repeats, put a coding
+    agent on something. They ride on the message that announced them, so acting on one
+    is a tap rather than a task the user has to remember to come back to."""
     drops = [
         [(f"🗑 Drop: {drop['title'][:22]}", f"/deletetodo {drop['id']}")]
         for drop in pop_pending_drops()
@@ -1055,7 +1061,14 @@ def todo_action_buttons() -> list[list[tuple[str, str]]] | None:
         [(f"🔗 Merge into: {merge['title'][:18]}", f"/mergetodo {merge['source']} {merge['target']}")]
         for merge in pop_pending_merges()
     ]
-    return (undo_title_buttons() or []) + drops + merges + _blocked_capture_button() or None
+    # Imported here rather than at the top: the coder needs this module for the
+    # report write-back, and Python cycles break at whichever import runs first
+    from connectors.coder_connector import pop_pending_coder_offers
+    coding = [
+        [(f"🧑‍💻 Code it: {offer['goal'][:20]}", f"/aicode {offer['todo_id']}")]
+        for offer in pop_pending_coder_offers()
+    ]
+    return (undo_title_buttons() or []) + drops + merges + coding + _blocked_capture_button() or None
 
 def configure_triage_projects() -> dict:
     """Creates the tags and a project per box, then retires the old Eisenhower view.

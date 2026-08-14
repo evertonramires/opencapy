@@ -285,23 +285,39 @@ The acknowledgement carries an **Undo** button, and your original is kept either
 
 Triage (`ENABLE_TODO_TRIAGE=true`):
 
-Every to-do that arrives gets sorted into the four urgent/important boxes and tagged
-with what else is true about it — whether an AI, someone you could hire or a product
-could take it off you, whether it's really a project in disguise, whether it's a
-two-minute job, and what it needs from you to get done. A "drop" verdict is only ever
-offered as a button; Capy never deletes anything on its own.
+Every to-do that arrives gets two separate screenings. The first says what it **is**:
+urgent (time pressure right now) and important (real consequences if it never
+happens), which picks its quadrant. The second says what to **do** about it — do,
+schedule, delegate or drop — its own tag, because the two don't always agree: an
+urgent and important task you can't do yourself is still a delegate. On top of that
+it's tagged with what else is true — whether an AI could take it off you (asked
+explicitly of every task: most knowledge work qualifies), whether it's really a
+project in disguise, whether it's a two-minute job, and what it needs from you to get
+done. A "drop" verdict is only ever offered as a button; Capy never deletes anything
+on its own.
 
-Run `/triagesetup` once and each box becomes **its own project** — Do, Schedule,
-Delegate, Drop — leaving the Inbox as strictly the pile of things not yet sorted, so
+Run `/triagesetup` once and each quadrant becomes **its own project** — ☸️ Urgent and
+important, 🌱 Not urgent and important, 🔥 Urgent and not important, 🍂 Not urgent and
+not important — leaving the Inbox as strictly the pile of things not yet sorted, so
 its length tells you how far behind triage is. Filing a to-do moves it into that
 project and Vikunja files the card into that project's own To-Do / Doing / Done board.
-The box is also kept as a tag, so you can still filter by quadrant from anywhere.
+The quadrant is also kept as a matching tag, so future views can filter or sort on
+tags alone. Re-running `/triagesetup` after an update renames existing projects and
+labels **in place** — tasks, views and label assignments are all kept.
+
+With `ENABLE_TODO_POMODORO=true` every triaged to-do also gets a 🍅 tag with how many
+pomodori it should take, sized by your own rhythm (`POMODORO_MINUTES` of work,
+`POMODORO_BREAK_MINUTES` of pause). Two-minute tasks get none. When a to-do is split
+into steps, each step carries its own estimate (`… 🍅2`) and the parent's tag becomes
+the sum. Vikunja has no native pomodoro clock, so the tags are the annotation — the
+count is the plan, your timer stays your own.
 
 ```code
-/triagesetup - create the tags and the four box projects in Vikunja
-/triage 12 - sort to-do 12 into a box
+/triagesetup - create the tags and the four quadrant projects in Vikunja
+/triage 12 - sort to-do 12 into a quadrant
 /triageall - sort everything still in the Inbox
-/quadrant 12 schedule - move to-do 12 to another box by hand
+/quadrant 12 not-urgent-important - move to-do 12 to another quadrant by hand
+/action 12 delegate - change what to do about to-do 12 without moving it
 ```
 
 Timeline (`ENABLE_VIKUNJA` on, no extra setting):

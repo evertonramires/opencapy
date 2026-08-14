@@ -198,7 +198,11 @@
         },
         {
             "command": "quadrant",
-            "description": "Move a to-do to another box. Example: /quadrant 12 schedule"
+            "description": "Move a to-do to another quadrant. Example: /quadrant 12 not-urgent-important"
+        },
+        {
+            "command": "action",
+            "description": "Change what to do about a to-do (its do/schedule/delegate/drop tag). Example: /action 12 delegate"
         },
         {
             "command": "triagesetup",

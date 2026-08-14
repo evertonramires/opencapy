@@ -23,14 +23,23 @@ _capy_comment_header = "<p>🐹 <b>Capy</b></p>"
 _capy_comment_marker = "<!-- capy -->"
 _seen_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "hood", "vikunja_seen.json")
 # The triage vocabulary. Slugs are what the code and the model use, titles are what
-# the user sees in Vikunja. Exactly one quadrant label per task drives the board; the
-# rest are optional and answer a different question each.
-_quadrant_slugs = ["do", "schedule", "delegate", "drop"]
+# the user sees in Vikunja. The quadrant and the action are two separate screenings
+# now: urgent × important says what a task is, do/schedule/delegate/drop says what to
+# do about it, and though they usually agree they are allowed not to — an urgent and
+# important task the user can't do themselves is still a delegate.
+_quadrant_slugs = ["urgent-important", "not-urgent-important", "urgent-not-important", "not-urgent-not-important"]
+_action_slugs = ["do", "schedule", "delegate", "drop"]
 _triage_labels = {
-    "do": ("🔥 do · urgent + important", "e74c3c"),
-    "schedule": ("📅 schedule · important, not urgent", "3498db"),
-    "delegate": ("👤 delegate · urgent, not important", "e67e22"),
-    "drop": ("🗑 drop · neither", "95a5a6"),
+    # The quadrant labels mirror the projects word for word, so future views can
+    # filter or sort on tags alone without leaning on which project a task is in
+    "urgent-important": ("☸️ urgent and important", "8e44ad"),
+    "not-urgent-important": ("🌱 not urgent and important", "27ae60"),
+    "urgent-not-important": ("🔥 urgent and not important", "e67e22"),
+    "not-urgent-not-important": ("🍂 not urgent and not important", "795548"),
+    "do": ("✅ do", "e74c3c"),
+    "schedule": ("🗓 schedule", "3498db"),
+    "delegate": ("🤝 delegate", "e67e22"),
+    "drop": ("✂️ drop", "95a5a6"),
     "not-needed": ("❓ does this need doing?", "9b59b6"),
     "ai-can-do": ("🤖 an AI can do this", "1abc9c"),
     "hire-out": ("🧑 hire this out", "16a085"),
@@ -45,16 +54,46 @@ _triage_labels = {
     "@calls": ("@calls", "2c3e50"),
     "@waiting-for": ("@waiting-for", "2c3e50"),
 }
-_triage_board_title = "Eisenhower"
-# The same four slugs as the quadrant labels, so there is nothing extra to keep aligned.
-# A to-do's box is its project now; the label rides along so the quadrant is still
-# something you can filter on from anywhere.
-_quadrant_projects = {
-    "do": "🔥 Do",
-    "schedule": "📅 Schedule",
-    "delegate": "👤 Delegate",
-    "drop": "🗑 Drop",
+# What each label was called before, so a redeploy renames the existing labels in
+# place instead of creating twins and stranding every task's old assignments
+_old_label_titles = {
+    "do": "🔥 do · urgent + important",
+    "schedule": "📅 schedule · important, not urgent",
+    "delegate": "👤 delegate · urgent, not important",
+    "drop": "🗑 drop · neither",
 }
+_triage_board_title = "Eisenhower"
+# A to-do's box is its project; the emoji carry the mood on purpose — dharma for the
+# deep quadrant, growth for the long game, fire for what's burning, dead leaves for
+# what doesn't matter — and the colors below ride on both the project and its label.
+_quadrant_projects = {
+    "urgent-important": "☸️ Urgent and important",
+    "not-urgent-important": "🌱 Not urgent and important",
+    "urgent-not-important": "🔥 Urgent and not important",
+    "not-urgent-not-important": "🍂 Not urgent and not important",
+}
+_quadrant_colors = {
+    "urgent-important": "8e44ad",
+    "not-urgent-important": "27ae60",
+    "urgent-not-important": "e67e22",
+    "not-urgent-not-important": "795548",
+}
+_old_project_titles = {
+    "urgent-important": "🔥 Do",
+    "not-urgent-important": "📅 Schedule",
+    "urgent-not-important": "👤 Delegate",
+    "not-urgent-not-important": "🗑 Drop",
+}
+# The old quadrant slugs doubled as the box names; cached state and callers using
+# them still resolve to the box that action usually pairs with
+_legacy_quadrant_slugs = {
+    "do": "urgent-important",
+    "schedule": "not-urgent-important",
+    "delegate": "urgent-not-important",
+    "drop": "not-urgent-not-important",
+}
+_pomodoro_label_pattern = r"^🍅 \d+$"
+_pomodoro_label_color = "d35400"
 _request_timeout_seconds = 15
 _request_retries = 1
 _request_retry_delay_seconds = 2
@@ -76,6 +115,15 @@ def triage_enabled() -> bool:
 
 def dedupe_enabled() -> bool:
     return vikunja_enabled() and os.getenv("ENABLE_TODO_DEDUPE", "false").lower() in ["true", "1", "yes"]
+
+def pomodoro_enabled() -> bool:
+    return triage_enabled() and os.getenv("ENABLE_TODO_POMODORO", "false").lower() in ["true", "1", "yes"]
+
+def pomodoro_minutes() -> int:
+    return int(os.getenv("POMODORO_MINUTES", "25"))
+
+def pomodoro_break_minutes() -> int:
+    return int(os.getenv("POMODORO_BREAK_MINUTES", "5"))
 
 def _disabled_error() -> dict:
     return {"status": "error", "tool": "vikunja", "message": "Vikunja to-do tool is disabled. To enable it, set ENABLE_VIKUNJA=true and configure VIKUNJA_API_HOST and VIKUNJA_API_TOKEN in your .env file."}
@@ -139,7 +187,11 @@ def _project_titles() -> dict:
     projects are (re)resolved, which is the only thing that can change it."""
     if not _project_title_cache:
         ids = _read_state().get("triage_project_ids") or {}
-        _project_title_cache.update({pid: _quadrant_projects[slug] for slug, pid in ids.items() if slug in _quadrant_projects})
+        # Legacy mapping so a cache written before the quadrant renames still names the boxes
+        _project_title_cache.update({
+            pid: _quadrant_projects[_legacy_quadrant_slugs.get(slug, slug)]
+            for slug, pid in ids.items() if _legacy_quadrant_slugs.get(slug, slug) in _quadrant_projects
+        })
         _project_title_cache[_default_project_id()] = "Inbox"
     return _project_title_cache
 
@@ -583,10 +635,18 @@ def _read_steps(description: str) -> list[dict]:
     editor reserialises the whole description every time a box is tapped and would drop
     a comment on the way through."""
     block = re.search(_task_list_pattern, description.partition(_capy_notes_marker)[0], re.DOTALL)
-    return [
-        {"text": re.sub(r"<[^>]+>", "", item.partition("<div>")[2]).strip(), "done": 'data-checked="true"' in item}
-        for item in re.findall(r"<li[^>]*data-type=\"taskItem\".*?</li>", block.group(0) if block else "", re.DOTALL)
-    ]
+    steps = []
+    for item in re.findall(r"<li[^>]*data-type=\"taskItem\".*?</li>", block.group(0) if block else "", re.DOTALL):
+        text = re.sub(r"<[^>]+>", "", item.partition("<div>")[2]).strip()
+        # The estimate rides in the step text — steps aren't real tasks, so a label
+        # can't carry it — and is parsed back out here so the model sees it as data
+        estimate = re.search(r"🍅\s*(\d+)\s*$", text)
+        steps.append({
+            "text": text,
+            "done": 'data-checked="true"' in item,
+            "pomodoros": int(estimate.group(1)) if estimate else 0,
+        })
+    return steps
 
 def _write_steps_block(description: str, titles: list[str]) -> str:
     """Puts the checklist in its own block between whatever the user wrote and the
@@ -594,12 +654,14 @@ def _write_steps_block(description: str, titles: list[str]) -> str:
     eats an autopilot finding, or the other way round."""
     head, notes_marker, notes = description.partition(_capy_notes_marker)
     # A step that survives a rewrite keeps its tick, so refining the breakdown never
-    # quietly undoes work the user already did
-    ticked = {step["text"]: step["done"] for step in _read_steps(description)}
+    # quietly undoes work the user already did. Matching ignores the 🍅 annotation so
+    # adding or changing an estimate doesn't read as a brand new step and drop the tick.
+    bare = lambda text: re.sub(r"\s*🍅\s*\d+\s*$", "", text)
+    ticked = {bare(step["text"]): step["done"] for step in _read_steps(description)}
     # The old heading is stripped alongside the old list, so tasks split before the
     # steps went bare lose it the next time they are rewritten
     user_text = re.sub(_task_list_pattern, "", head, flags=re.DOTALL).replace(_capy_steps_marker, "").strip()
-    checklist = "".join(_checklist_item(title, ticked.get(title, False)) for title in titles)
+    checklist = "".join(_checklist_item(title, ticked.get(bare(title), False)) for title in titles)
     steps = f'<ul data-type="taskList">{checklist}</ul>'
     return "\n".join(part for part in [user_text, steps, notes_marker + notes if notes_marker else ""] if part)
 
@@ -705,24 +767,40 @@ def restore_todo_title(todo_id: int) -> dict:
     _write_state(state)
     return {"status": "success", "todo_id": todo_id, "title": old_title}
 
+def _rename_label(label: dict, title: str, color: str) -> bool:
+    """Renames a label in place, keeping its id — and therefore every task it is
+    already attached to. Creating a fresh label with the new name instead would leave
+    the whole backlog wearing the old one."""
+    updated = _request("post", f"/labels/{label['id']}", json={**label, "title": title, "hex_color": color})
+    return not isinstance(updated, dict) and updated.ok
+
 def ensure_triage_labels(refresh: bool = False) -> dict:
     """Creates the triage labels once and caches slug -> id. The ids are what matters:
     Vikunja's task filters match labels by id and reject titles outright, so the board's
     bucket filters can only be built after this has run. Returns {} if Vikunja said no.
     Deleting a label in Vikunja leaves the cache pointing at an id that no longer exists,
     so /triagesetup refreshes rather than trusting it — otherwise the obvious way to fix
-    a broken board would be the one thing that couldn't."""
+    a broken board would be the one thing that couldn't.
+
+    A label found under its old title is renamed in place rather than recreated:
+    matching is by title, so without the rename a retitled vocabulary would quietly
+    spawn twins and strand every existing task's assignments on the old set."""
     cached = _read_state().get("triage_label_ids") or {}
     if not refresh and set(cached) >= set(_triage_labels):
         return cached
-    response = _request("get", "/labels", params={"per_page": 50})
+    response = _request("get", "/labels", params={"per_page": 100})
     if isinstance(response, dict) or not response.ok:
         return {}
-    existing = {label["title"]: label["id"] for label in response.json() or []}
+    labels = response.json() or []
+    existing = {label["title"]: label for label in labels}
     ids = {}
     for slug, (title, color) in _triage_labels.items():
         if title in existing:
-            ids[slug] = existing[title]
+            ids[slug] = existing[title]["id"]
+            continue
+        old = existing.get(_old_label_titles.get(slug, ""))
+        if old and _rename_label(old, title, color):
+            ids[slug] = old["id"]
             continue
         created = _request("put", "/labels", json={"title": title, "hex_color": color})
         if isinstance(created, dict) or not created.ok:
@@ -733,24 +811,41 @@ def ensure_triage_labels(refresh: bool = False) -> dict:
     _write_state(state)
     return ids
 
+def _rename_project(project: dict, title: str, color: str) -> bool:
+    """Renames a box in place, keeping its id — and with it every task, view and
+    kanban bucket it holds. The whole point of renaming rather than recreating."""
+    updated = _request("post", f"/projects/{project['id']}", json={**project, "title": title, "hex_color": color})
+    return not isinstance(updated, dict) and updated.ok
+
 def ensure_triage_projects(refresh: bool = False) -> dict:
     """Creates a project per box and caches slug -> id, mirroring ensure_triage_labels
-    down to the refresh escape hatch. Vikunja gives every new project a List, Gantt,
-    Table and Kanban view of its own, and the kanban already comes with To-Do, Doing and
-    Done buckets, so the boards ask for no work here."""
-    cached = _read_state().get("triage_project_ids") or {}
+    down to the refresh escape hatch and the rename-in-place migration. Vikunja gives
+    every new project a List, Gantt, Table and Kanban view of its own, and the kanban
+    already comes with To-Do, Doing and Done buckets, so the boards ask for no work
+    here. State cached under the old do/schedule/delegate/drop slugs is carried over
+    to the quadrant slugs, so the rename pass knows which ids it owns."""
+    state_ids = _read_state().get("triage_project_ids") or {}
+    cached = {_legacy_quadrant_slugs.get(slug, slug): pid for slug, pid in state_ids.items()}
     if not refresh and set(cached) >= set(_quadrant_projects):
         return cached
-    response = _request("get", "/projects", params={"per_page": 50})
+    response = _request("get", "/projects", params={"per_page": 100})
     if isinstance(response, dict) or not response.ok:
         return {}
-    existing = {project["title"]: project["id"] for project in response.json() or []}
+    projects = response.json() or []
+    existing = {project["title"]: project for project in projects}
+    by_id = {project["id"]: project for project in projects}
     ids = {}
     for slug, title in _quadrant_projects.items():
         if title in existing:
-            ids[slug] = existing[title]
+            ids[slug] = existing[title]["id"]
             continue
-        created = _request("put", "/projects", json={"title": title})
+        # The cached id is trusted first: it survives the user retitling a box by
+        # hand, which a title match on the old name would mistake for a missing one
+        old = by_id.get(cached.get(slug)) or existing.get(_old_project_titles.get(slug, ""))
+        if old and _rename_project(old, title, _quadrant_colors[slug]):
+            ids[slug] = old["id"]
+            continue
+        created = _request("put", "/projects", json={"title": title, "hex_color": _quadrant_colors[slug]})
         if isinstance(created, dict) or not created.ok:
             return {}
         ids[slug] = created.json()["id"]
@@ -776,12 +871,43 @@ def _move_to_quadrant_project(todo_id: int, quadrant: str) -> dict:
         return _request_error(response)
     return {"status": "success", "todo_id": todo_id, "project": _quadrant_projects[quadrant]}
 
-def set_todo_labels(todo_id: int, slugs: list[str]) -> dict:
+def _is_pomodoro_title(title: str) -> bool:
+    return bool(re.match(_pomodoro_label_pattern, title or ""))
+
+def _ensure_pomodoro_label(count: int) -> int | None:
+    """Find-or-create the 🍅 {count} label, id cached per count. The titles are exact
+    counts on purpose — the user chose uncapped precision over buckets — and they never
+    embed minutes, so changing POMODORO_MINUTES later re-scales every estimate at once
+    instead of orphaning a generation of labels."""
+    state = _read_state()
+    cached = state.get("pomodoro_label_ids") or {}
+    if str(count) in cached:
+        return cached[str(count)]
+    title = f"🍅 {count}"
+    response = _request("get", "/labels", params={"per_page": 100, "s": "🍅"})
+    if isinstance(response, dict) or not response.ok:
+        return None
+    found = next((label for label in response.json() or [] if label["title"] == title), None)
+    if not found:
+        created = _request("put", "/labels", json={"title": title, "hex_color": _pomodoro_label_color})
+        if isinstance(created, dict) or not created.ok:
+            return None
+        found = created.json()
+    state = _read_state()
+    cached = state.get("pomodoro_label_ids") or {}
+    cached[str(count)] = found["id"]
+    state["pomodoro_label_ids"] = cached
+    _write_state(state)
+    return found["id"]
+
+def set_todo_labels(todo_id: int, slugs: list[str], pomodoros: int = 0) -> dict:
     """Sets the task's triage labels in one call. Deliberately not _patch_task: the bulk
     endpoint touches only labels, so unlike a whole-task write it cannot blank the
     description or the due date on its way past. It does replace the whole label set
     though, so anything the user labelled the task with themselves is read first and
-    carried over, otherwise triage would quietly strip it."""
+    carried over, otherwise triage would quietly strip it. Pomodoro labels are ours
+    too, never carried: a fresh estimate must replace the old one, not stack next to
+    it, or a re-triaged task would wear two counts at once."""
     ids = ensure_triage_labels()
     if not ids:
         return {"status": "error", "tool": "vikunja", "message": "Could not read or create the triage labels in Vikunja."}
@@ -790,24 +916,43 @@ def set_todo_labels(todo_id: int, slugs: list[str]) -> dict:
         return current
     if not current.ok:
         return _request_error(current)
-    theirs = [{"id": label["id"]} for label in current.json().get("labels") or [] if label["id"] not in set(ids.values())]
-    response = _request("post", f"/tasks/{todo_id}/labels/bulk", json={"labels": theirs + [{"id": ids[slug]} for slug in slugs if slug in ids]})
+    theirs = [
+        {"id": label["id"]} for label in current.json().get("labels") or []
+        if label["id"] not in set(ids.values()) and not _is_pomodoro_title(label.get("title") or "")
+    ]
+    ours = [{"id": ids[slug]} for slug in slugs if slug in ids]
+    titles = [_triage_labels[slug][0] for slug in slugs if slug in ids]
+    if pomodoros > 0:
+        pomodoro_id = _ensure_pomodoro_label(pomodoros)
+        if pomodoro_id:
+            ours.append({"id": pomodoro_id})
+            titles.append(f"🍅 {pomodoros}")
+    response = _request("post", f"/tasks/{todo_id}/labels/bulk", json={"labels": theirs + ours})
     if isinstance(response, dict):
         return response
     if not response.ok:
         return _request_error(response)
-    return {"status": "success", "todo_id": todo_id, "labels": [_triage_labels[slug][0] for slug in slugs if slug in ids]}
+    return {"status": "success", "todo_id": todo_id, "labels": titles}
 
-def triage_todo(todo_id: int, quadrant: str, extra_labels: list[str] = [], reason: str = "") -> dict:
-    """Files a to-do into one of the four boxes and tags what else is true about it.
-    The quadrant is a single value rather than something counted out of a list, so a
-    task can never end up in two columns at once."""
+def _quadrant_for(urgent: bool, important: bool) -> str:
+    return f"{'urgent' if urgent else 'not-urgent'}-{'important' if important else 'not-important'}"
+
+def triage_todo(todo_id: int, urgent: bool, important: bool, action: str, extra_labels: list[str] = [], pomodoros: int = 0, reason: str = "") -> dict:
+    """Files a to-do by two separate screenings. Urgent × important says what the task
+    is and decides its box — the project it lives in, plus the matching quadrant tag so
+    views can filter on tags alone. The action, do/schedule/delegate/drop, says what to
+    do about it and is its own tag: the two usually agree, but an urgent and important
+    task the user can't do themselves is still a delegate, and forcing the pairing
+    would erase exactly the cases worth noticing. The pomodoro estimate rides in the
+    same label write; a two-minute task never gets one, the tag would outweigh the task."""
     if not triage_enabled():
         return {"status": "error", "tool": "vikunja", "message": "To-do triage is disabled. To enable it, set ENABLE_TODO_TRIAGE=true in your .env file."}
-    if quadrant not in _quadrant_slugs:
-        return {"status": "error", "tool": "vikunja", "message": f"Unknown quadrant '{quadrant}', pick one of {_quadrant_slugs}."}
-    extras = [slug for slug in extra_labels if slug in _triage_labels and slug not in _quadrant_slugs]
-    saved = set_todo_labels(todo_id, [quadrant] + extras)
+    if action not in _action_slugs:
+        return {"status": "error", "tool": "vikunja", "message": f"Unknown action '{action}', pick one of {_action_slugs}."}
+    quadrant = _quadrant_for(urgent, important)
+    extras = [slug for slug in extra_labels if slug in _triage_labels and slug not in _quadrant_slugs and slug not in _action_slugs]
+    estimate = 0 if "two-minute" in extras or not pomodoro_enabled() else max(0, pomodoros)
+    saved = set_todo_labels(todo_id, [quadrant, action] + extras, pomodoros=estimate)
     if saved.get("status") != "success":
         return saved
     # Label and project are written by the same call on purpose: they say the same thing
@@ -820,32 +965,66 @@ def triage_todo(todo_id: int, quadrant: str, extra_labels: list[str] = [], reaso
     # user can act on. The reasoning goes in a comment rather than the description: the
     # Capy block there belongs to research notes, which would overwrite it the moment
     # autopilot finishes a job on the same task.
-    if quadrant == "drop" or "not-needed" in extras:
+    if action == "drop" or "not-needed" in extras:
         if reason:
             add_todo_comment(todo_id, f"<p>{reason}</p>")
         current = get_todo(todo_id)
         if current.get("status") == "success":
             _queue_drop_offer(todo_id, current["todo"]["title"])
-    return {"status": "success", "todo_id": todo_id, "quadrant": _triage_labels[quadrant][0], "project": moved["project"], "labels": saved["labels"]}
+    return {
+        "status": "success",
+        "todo_id": todo_id,
+        "quadrant": _triage_labels[quadrant][0],
+        "action": _triage_labels[action][0],
+        "project": moved["project"],
+        "labels": saved["labels"],
+        "pomodoros": estimate,
+    }
+
+def _current_triage_slugs(todo: dict) -> list[str]:
+    titles = set(todo["labels"])
+    return [slug for slug, (title, _) in _triage_labels.items() if title in titles]
+
+def _current_pomodoros(todo: dict) -> int:
+    """The estimate a task already wears, read back from its 🍅 label so a manual
+    override can rewrite the label set without losing it."""
+    for title in todo["labels"]:
+        if _is_pomodoro_title(title):
+            return int(title.split()[-1])
+    return 0
 
 def set_todo_quadrant(todo_id: int, quadrant: str) -> dict:
-    """Moves a to-do to another box by hand, keeping everything else triage decided
-    about it. This is how the user overrules a verdict without having to re-run triage
-    and hope it lands differently."""
+    """Moves a to-do to another box by hand, keeping the action, the extras and the
+    estimate exactly as triage left them. This is how the user overrules a verdict
+    without having to re-run triage and hope it lands differently."""
+    quadrant = _legacy_quadrant_slugs.get(quadrant, quadrant)
     if quadrant not in _quadrant_slugs:
         return {"status": "error", "tool": "vikunja", "message": f"Unknown quadrant '{quadrant}', pick one of {_quadrant_slugs}."}
     current = get_todo(todo_id)
     if current.get("status") != "success":
         return current
-    titles = set(current["todo"]["labels"])
-    extras = [slug for slug, (title, _) in _triage_labels.items() if title in titles and slug not in _quadrant_slugs]
-    saved = set_todo_labels(todo_id, [quadrant] + extras)
+    kept = [slug for slug in _current_triage_slugs(current["todo"]) if slug not in _quadrant_slugs]
+    saved = set_todo_labels(todo_id, [quadrant] + kept, pomodoros=_current_pomodoros(current["todo"]))
     if saved.get("status") != "success":
         return saved
     moved = _move_to_quadrant_project(todo_id, quadrant)
     if moved.get("status") != "success":
         return moved
     return {"status": "success", "todo_id": todo_id, "title": current["todo"]["title"], "quadrant": _triage_labels[quadrant][0], "project": moved["project"]}
+
+def set_todo_action(todo_id: int, action: str) -> dict:
+    """Swaps only the action tag — what to do about the task — leaving its box, extras
+    and estimate alone. The counterpart to set_todo_quadrant for the second screening."""
+    if action not in _action_slugs:
+        return {"status": "error", "tool": "vikunja", "message": f"Unknown action '{action}', pick one of {_action_slugs}."}
+    current = get_todo(todo_id)
+    if current.get("status") != "success":
+        return current
+    kept = [slug for slug in _current_triage_slugs(current["todo"]) if slug not in _action_slugs]
+    saved = set_todo_labels(todo_id, kept + [action], pomodoros=_current_pomodoros(current["todo"]))
+    if saved.get("status") != "success":
+        return saved
+    return {"status": "success", "todo_id": todo_id, "title": current["todo"]["title"], "action": _triage_labels[action][0]}
 
 def _queue_drop_offer(todo_id: int, title: str) -> None:
     state = _read_state()
@@ -910,11 +1089,14 @@ def untriaged_todos() -> list[dict] | dict:
     inbox = _default_project_id()
     return [_simplify_todo(task) for task in tasks if not task.get("done") and task.get("project_id") == inbox]
 
-def add_subtasks(parent_todo_id: int, titles: list[str]) -> dict:
+def add_subtasks(parent_todo_id: int, titles: list[str], pomodoros: list[int] = []) -> dict:
     """Writes the steps as a checklist inside the to-do's own description. Breaking a
     project into real subtasks doubles or triples the length of the list, and a list
     that long is the thing that makes someone stop opening it at all — the steps belong
-    inside the task they belong to, not beside it."""
+    inside the task they belong to, not beside it. Each step carries its own pomodoro
+    estimate in its text — steps aren't real tasks, so a label can't hold it — and the
+    parent's 🍅 label becomes the sum, so the task's own tag says what the whole thing
+    costs while the checklist says where the time goes."""
     if not subtasks_enabled():
         return {"status": "error", "tool": "vikunja", "message": "Subtask splitting is disabled. To enable it, set ENABLE_VIKUNJA_SUBTASKS=true in your .env file."}
     response = _request("get", f"/tasks/{parent_todo_id}")
@@ -922,13 +1104,27 @@ def add_subtasks(parent_todo_id: int, titles: list[str]) -> dict:
         return response
     if not response.ok:
         return _request_error(response)
+    estimates = list(pomodoros)[:len(titles)] if pomodoro_enabled() else []
+    if estimates:
+        titles = [
+            f"{title} 🍅{estimate}" if estimate > 0 else title
+            for title, estimate in zip(titles, estimates + [0] * (len(titles) - len(estimates)))
+        ]
     current = response.json().get("description") or ""
     saved = _patch_task(parent_todo_id, {"description": _write_steps_block(current, titles)})
     if isinstance(saved, dict):
         return saved
     if not saved.ok:
         return _request_error(saved)
-    return {"status": "success", "parent_todo_id": parent_todo_id, "steps": _read_steps(saved.json().get("description") or "")}
+    total = sum(estimate for estimate in estimates if estimate > 0)
+    if total > 0:
+        task = saved.json()
+        current_slugs = [
+            slug for slug, (title, _) in _triage_labels.items()
+            if title in [label.get("title") for label in task.get("labels") or []]
+        ]
+        set_todo_labels(parent_todo_id, current_slugs, pomodoros=total)
+    return {"status": "success", "parent_todo_id": parent_todo_id, "steps": _read_steps(saved.json().get("description") or ""), "total_pomodoros": total}
 
 def complete_todo(todo_id: int) -> dict:
     if not vikunja_enabled():

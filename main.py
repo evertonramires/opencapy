@@ -30,6 +30,7 @@ from connectors.vikunja_connector import (
     mark_stale_sweep_sent,
     mark_todos_done,
     mark_todos_seen,
+    pomodoro_enabled,
     retitle_enabled,
     subtasks_enabled,
     todo_action_buttons,
@@ -201,13 +202,20 @@ if __name__ == "__main__":
                                     "Where that's the case, call improve_todo_title to rewrite it as the first concrete action, and name the new "
                                     "wording in your reply. Leave the ones that are already clear actions exactly as they are. "
                                 ) if retitle_enabled() else ""
+                                pomodoro_hint = (
+                                    "Estimate the pomodori in the same triage_todo call and mention it only in passing ('about two "
+                                    "pomodori'), never as a verdict or a demand. "
+                                ) if pomodoro_enabled() else ""
                                 triage_hint = (
-                                    "Call triage_todo once for each of these to file it into the user's four boxes, which moves it out of the Inbox "
-                                    "into that box's own project. Mention the box in a few words, "
-                                    "as a note not a verdict, and never explain the whole method back to them. If it comes out as 'ai-can-do' and you "
-                                    "could genuinely do it alone, queue it with queue_task_work in the same breath. If it comes out 'drop' or "
+                                    "Call triage_todo once for each of these: screen urgent and important separately to pick its box, then "
+                                    "decide the action (do/schedule/delegate/drop) as its own second question, since the two don't always "
+                                    "agree. Mention the box in a few words, as a note not a verdict, and never explain the whole method back "
+                                    "to them. Screen every task for 'ai-can-do' — research, drafting, comparing, gathering, summarizing, most "
+                                    "knowledge work qualifies even when they act on the result afterwards — and when you could genuinely do it "
+                                    "alone, queue it with queue_task_work in the same breath. If it comes out 'drop' or "
                                     "'not-needed', say so gently and leave it entirely up to them, a button will be offered and you must not delete "
                                     "anything yourself. If it comes out 'two-minute', say it's probably faster to just do than to plan. "
+                                    f"{pomodoro_hint}"
                                 ) if triage_enabled() else ""
                                 # A to-do written straight into Vikunja never passes the check
                                 # add_todo does, so the same thought lands twice under two

@@ -16,6 +16,9 @@ from connectors.vikunja_connector import (
     merge_into_todo as connector_merge_into_todo,
     comments_enabled,
     dedupe_enabled,
+    pomodoro_enabled,
+    pomodoro_minutes,
+    pomodoro_break_minutes,
     retitle_enabled,
     subtasks_enabled,
     triage_enabled,
@@ -49,9 +52,9 @@ def update_todo(todo_id: int, title: str = "", description: str = "", due_date: 
     notify_tool_use(f"🔧✅✏️ Vikunja tool used to update to-do {todo_id}.")
     return connector_update_todo(todo_id, title, description, due_date, start_date, priority)
 
-def add_subtasks(parent_todo_id: int, titles: list[str]) -> dict:
+def add_subtasks(parent_todo_id: int, titles: list[str], pomodoros: list[int] = []) -> dict:
     notify_tool_use(f"🔧✅🪜 Vikunja tool used to add a {len(titles)} step checklist to to-do {parent_todo_id}.")
-    return connector_add_subtasks(parent_todo_id, titles)
+    return connector_add_subtasks(parent_todo_id, titles, pomodoros)
 
 def list_todo_projects() -> list[dict] | dict:
     notify_tool_use(f"🔧✅📁 Vikunja tool used to list to-do projects.")
@@ -73,9 +76,9 @@ def improve_todo_title(todo_id: int, title: str) -> dict:
     notify_tool_use(f"🔧✅✒️ Vikunja tool used to sharpen the title of to-do {todo_id}.")
     return connector_rename_todo(todo_id, title)
 
-def triage_todo(todo_id: int, quadrant: str, extra_labels: list[str] = [], reason: str = "") -> dict:
-    notify_tool_use(f"🔧✅🧭 Vikunja tool used to triage to-do {todo_id} as '{quadrant}'.")
-    return connector_triage_todo(todo_id, quadrant, extra_labels, reason)
+def triage_todo(todo_id: int, urgent: bool, important: bool, action: str, extra_labels: list[str] = [], pomodoros: int = 0, reason: str = "") -> dict:
+    notify_tool_use(f"🔧✅🧭 Vikunja tool used to triage to-do {todo_id} ({'urgent' if urgent else 'not urgent'}, {'important' if important else 'not important'} → {action}).")
+    return connector_triage_todo(todo_id, urgent, important, action, extra_labels, pomodoros, reason)
 
 add_todo_tool = {
     "type": "function",
@@ -225,6 +228,17 @@ if subtasks_enabled():
                         "items": {"type": "string"},
                         "description": "The steps, in the order they should be done, each a small concrete action (e.g. 'Find the workshop phone number'). Plain text, no numbering or bullets, the checklist adds those.",
                     },
+                    **({
+                        "pomodoros": {
+                            "type": "array",
+                            "items": {"type": "integer"},
+                            "description": (
+                                f"One estimate per step, same length and order as titles: how many pomodori ({pomodoro_minutes()} min "
+                                "each) that step needs, 0 when it's too small or too vague to say. Every step should get its own honest "
+                                "estimate. The number is annotated on the step itself and the parent to-do's 🍅 tag becomes the sum."
+                            ),
+                        },
+                    } if pomodoro_enabled() else {}),
                 },
                 "required": ["parent_todo_id", "titles"],
             },
@@ -327,27 +341,47 @@ if retitle_enabled():
     }
 
 if triage_enabled():
+    _pomodoro_property = {
+        "pomodoros": {
+            "type": "integer",
+            "description": (
+                f"How many pomodori of focused work this task needs — the user's pomodoro is {pomodoro_minutes()} minutes of work "
+                f"plus a {pomodoro_break_minutes()} minute break. Estimate honestly from what the task says, don't pad. Leave 0 for "
+                "anything labelled 'two-minute' (no estimate is attached to those) and when the task text doesn't say enough to guess. "
+                "Above 4 pomodori, tag the number anyway but also add the 'project' label and break it down with add_subtasks. "
+                "The estimate becomes a 🍅 tag on the task; calling again replaces it."
+            ),
+        },
+    } if pomodoro_enabled() else {}
+
     triage_todo_tool = {
         "type": "function",
         "function": {
             "name": "triage_todo",
             "description": (
-                "File a Vikunja to-do into the user's four boxes and tag what else is true about it. Each box is its own project, so this "
-                "moves the to-do out of the Inbox and into that project as well as tagging it; the Inbox is only ever the unsorted pile. "
-                "Run this on every to-do still sitting in the Inbox. Two independent axes decide the box. IMPORTANT means it moves something the user actually cares about "
-                "forward, or there are real consequences if it never happens; a task can be loud and still not be important. URGENT means "
-                "there is time pressure on it right now, a deadline, an appointment, something that expires or blocks someone else; a task "
-                "can matter enormously and not be urgent at all, and those are the ones that quietly never get done.\n"
+                "File a Vikunja to-do by two separate screenings, and tag what else is true about it. Run this on every to-do still "
+                "sitting in the Inbox; the Inbox is only ever the unsorted pile.\n"
+                "FIRST SCREENING — what the task is, on two independent axes. IMPORTANT means it moves something the user actually cares "
+                "about forward, or there are real consequences if it never happens; a task can be loud and still not be important. URGENT "
+                "means there is time pressure on it right now, a deadline, an appointment, something that expires or blocks someone else; "
+                "a task can matter enormously and not be urgent at all, and those are the ones that quietly never get done. The two answers "
+                "pick the quadrant, which is both the project the to-do moves to and a tag on it.\n"
+                "SECOND SCREENING — what to do about it: 'do', 'schedule', 'delegate' or 'drop', its own tag. It usually follows the "
+                "quadrant — urgent+important tends to be do, important-not-urgent schedule, urgent-not-important delegate, neither drop — "
+                "but screen it separately and never force the mapping: an urgent and important task the user can't do themselves is still "
+                "a delegate, and a two-minute task is a do no matter its quadrant.\n"
                 "Then ask three questions in this order, because the order is the whole point: does this really need to be done at all, "
                 "before anything else, since there is no sense automating or delegating something that should simply not exist; if it must "
-                "happen, can someone or something else do it, an AI, a person the user could hire, or a product they could just buy; and only "
-                "then, does it have to happen now.\n"
-                "Answer the first with 'not-needed' when you genuinely doubt it needs doing, the second with 'ai-can-do', 'hire-out' or "
-                "'buy-instead', and the third by setting a due date with update_todo rather than a label. If it would take under two minutes, "
-                "label it 'two-minute' and don't route it to anyone, doing it is cheaper than delegating it.\n"
-                "Add extra labels only when clearly true, never more than three, and never guess a context or an energy level you have no "
-                "evidence for. 'drop' and 'not-needed' are proposals, not decisions: they raise a button for the user and you must never "
-                "delete anything yourself, never lecture about the task, and never imply they were wrong to have written it down."
+                "happen, can someone or something else do it; and only then, does it have to happen now — answer that one with a due date "
+                "via update_todo rather than a label. If it would take under two minutes, label it 'two-minute' and don't route it to "
+                "anyone, doing it is cheaper than delegating it.\n"
+                "For the second question, ALWAYS ask explicitly: could an AI do this task or its next concrete step? Research, drafting, "
+                "comparing options or prices, gathering links or contact details, summarizing, planning, writing code or documents — most "
+                "knowledge work qualifies, and 'ai-can-do' applies even when the user must act on the result afterwards. Only skip it when "
+                "the task genuinely needs their body, wallet, memory or personal taste. 'hire-out' and 'buy-instead' cover the human and "
+                "product versions of the same question.\n"
+                "'drop' and 'not-needed' are proposals, not decisions: they raise a button for the user and you must never delete anything "
+                "yourself, never lecture about the task, and never imply they were wrong to have written it down."
             ),
             "parameters": {
                 "type": "object",
@@ -356,14 +390,21 @@ if triage_enabled():
                         "type": "integer",
                         "description": "The id of the to-do to triage.",
                     },
-                    "quadrant": {
+                    "urgent": {
+                        "type": "boolean",
+                        "description": "Is there time pressure on it right now — a deadline, an appointment, something expiring or blocking someone else?",
+                    },
+                    "important": {
+                        "type": "boolean",
+                        "description": "Does it move something the user actually cares about forward, or are there real consequences if it never happens?",
+                    },
+                    "action": {
                         "type": "string",
                         "enum": ["do", "schedule", "delegate", "drop"],
                         "description": (
-                            "Which box it belongs in, and therefore which project it moves to. 'do' is urgent and important, handle it "
-                            "personally and soon. 'schedule' is important but not urgent, the quadrant worth protecting, so give it a date. "
-                            "'delegate' is urgent but not important, it wants to come off the user's plate. 'drop' is neither and is only "
-                            "ever a suggestion."
+                            "The second screening, decided on its own. 'do' is handle it personally and soon. 'schedule' is give it a "
+                            "date and protect it. 'delegate' is it wants to come off the user's plate — an AI, a person, a product. "
+                            "'drop' is only ever a suggestion."
                         ),
                     },
                     "extra_labels": {
@@ -376,12 +417,14 @@ if triage_enabled():
                             ],
                         },
                         "description": (
-                            "At most three, and only what is clearly true. 'project' means it needs more than one step, so follow it with "
-                            "add_subtasks. 'two-minute' means it is faster to just do than to plan. 'low-energy' is doable while depleted, "
-                            "'deep-focus' needs a good head. The @ labels are where or with what it can be done, and '@waiting-for' is for "
-                            "anything now sitting with someone else."
+                            "'ai-can-do' is screened on every task per the rule above and doesn't count against the limit of three. "
+                            "The rest only when clearly true: 'project' means it needs more than one step, so follow it with add_subtasks. "
+                            "'two-minute' means it is faster to just do than to plan. 'low-energy' is doable while depleted, 'deep-focus' "
+                            "needs a good head — never guess a context or an energy level you have no evidence for. The @ labels are where "
+                            "or with what it can be done, and '@waiting-for' is for anything now sitting with someone else."
                         ),
                     },
+                    **_pomodoro_property,
                     "reason": {
                         "type": "string",
                         "description": (
@@ -390,7 +433,7 @@ if triage_enabled():
                         ),
                     },
                 },
-                "required": ["todo_id", "quadrant"],
+                "required": ["todo_id", "urgent", "important", "action"],
             },
         },
     }
@@ -461,7 +504,7 @@ list_todo_projects_tool = {
     "type": "function",
     "function": {
         "name": "list_todo_projects",
-        "description": "List the Vikunja projects with their ids. The Inbox holds everything not yet sorted, and there is a project per box (Do, Schedule, Delegate, Drop) that triage_todo files things into.",
+        "description": "List the Vikunja projects with their ids. The Inbox holds everything not yet sorted, and there is a project per quadrant (Urgent and important, Not urgent and important, Urgent and not important, Not urgent and not important) that triage_todo files things into.",
         "parameters": {
             "type": "object",
             "properties": {},

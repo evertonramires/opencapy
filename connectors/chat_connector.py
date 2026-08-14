@@ -26,6 +26,7 @@ from connectors.vikunja_connector import (
     restore_todo_title,
     take_blocked_capture,
     retitle_enabled,
+    set_todo_action,
     set_todo_quadrant,
     todo_action_buttons,
     triage_enabled,
@@ -571,7 +572,20 @@ def read_messages():
                         continue
                     send_message(f"🧭 **{result['title']}** is now in {result['quadrant']}.")
                 except Exception as e:
-                    send_message(f"Usage: /quadrant <todo_id> <do|schedule|delegate|drop>. Details: {e}")
+                    send_message(f"Usage: /quadrant <todo_id> <urgent-important|not-urgent-important|urgent-not-important|not-urgent-not-important>. Details: {e}")
+            elif _is_command(message, "/action"):
+                try:
+                    if not triage_enabled():
+                        send_message("Triage is off. Set ENABLE_TODO_TRIAGE=true to turn it on.")
+                        continue
+                    parts = message[len("/action"):].strip().split()
+                    result = set_todo_action(int(parts[0]), parts[1])
+                    if result.get("status") != "success":
+                        send_message(f"Sorry, I couldn't retag that one. {result.get('message')}")
+                        continue
+                    send_message(f"🧭 **{result['title']}** is now tagged {result['action']}.")
+                except Exception as e:
+                    send_message(f"Usage: /action <todo_id> <do|schedule|delegate|drop>. Details: {e}")
             elif _is_command(message, "/snooze"):
                 try:
                     parts = message[len("/snooze"):].strip().split()

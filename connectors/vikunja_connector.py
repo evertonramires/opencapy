@@ -400,7 +400,7 @@ def merge_into_todo(todo_id: int, details: str, due_date: str = "", priority: in
         return current
     todo = current["todo"]
     conflicts = []
-    changes = {"description": _append_merge_note(todo["description"], details)}
+    changes = {"description": _append_merge_note(todo["description"], _normalize_model_html(details))}
     if due_date:
         if not todo["due_date"]:
             changes["due_date"] = due_date
@@ -615,6 +615,7 @@ def append_todo_description(todo_id: int, notes_html: str) -> dict:
         return response
     if not response.ok:
         return _request_error(response)
+    notes_html = _normalize_model_html(notes_html)
     current = response.json().get("description") or ""
     user_text = current.split(_capy_notes_marker)[0].rstrip()
     updated = f"{user_text}\n{_capy_notes_marker}\n{notes_html}" if user_text else f"{_capy_notes_marker}\n{notes_html}"
@@ -674,6 +675,21 @@ def _write_steps_block(description: str, titles: list[str]) -> str:
 def _is_capy_comment(comment: str) -> bool:
     return _capy_comment_marker in comment or _capy_comment_header in comment
 
+# Escaped-tag shapes like &lt;p&gt; — the fingerprint of a model that HTML-escaped its
+# own markup. Real text about HTML would be quoting a tag or two, not writing whole
+# paragraphs of them, so requiring a closing shape keeps false positives out.
+_escaped_html_pattern = r"&lt;/?(?:p|b|i|u|em|strong|ul|ol|li|a|code|pre|br|h[1-6])(?:\s[^&]*)?&gt;"
+
+def _normalize_model_html(text: str) -> str:
+    """Un-escapes markup a model delivered as entities. The local fallback model
+    HTML-escapes its output where the primary one doesn't, and content is stored
+    verbatim, so without this every buffered evening quietly writes descriptions
+    that render as a wall of literal tags. Applied once at the write boundary,
+    and only when escaped tags are actually present."""
+    if re.search(_escaped_html_pattern, text or ""):
+        return html.unescape(text)
+    return text
+
 def plain_comment_text(comment_html: str) -> str:
     """A comment as the user typed it, markup stripped. The watcher matches comment
     commands like /start and /stop against this, mechanically — the whole point of a
@@ -707,7 +723,7 @@ def add_todo_comment(todo_id: int, comment_html: str) -> dict:
     stays attached to the task instead of scrolling away in chat."""
     if not vikunja_enabled():
         return _disabled_error()
-    body = f"{_capy_comment_header}\n{comment_html}\n{_capy_comment_marker}"
+    body = f"{_capy_comment_header}\n{_normalize_model_html(comment_html)}\n{_capy_comment_marker}"
     response = _request("put", f"/tasks/{todo_id}/comments", json={"comment": body})
     if isinstance(response, dict):
         return response

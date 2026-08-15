@@ -49,7 +49,14 @@ def set_plan(date_iso: str, tasks: list[str], source: str) -> dict:
     day["plan"] = tasks
     day["plan_source"] = source
     _write_state(state)
-    _sync_appflowy(date_iso, [f"Plan ({'chosen by Capy' if source == 'capy' else 'chosen by the user'}):"] + [f"• {task}" for task in tasks])
+    if source == "capy":
+        # Only a Capy pick names its model; the user's own choices are their own
+        from connectors.llm_connector import authoring_model
+        model = authoring_model()
+        heading = f"Plan (chosen by Capy · {model}):" if model else "Plan (chosen by Capy):"
+    else:
+        heading = "Plan (chosen by the user):"
+    _sync_appflowy(date_iso, [heading] + [f"• {task}" for task in tasks])
     return {"status": "success", "date": date_iso, "plan": tasks, "source": source}
 
 

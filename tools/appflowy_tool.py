@@ -45,6 +45,12 @@ def add_appflowy_page(title: str, parent_view_id: str) -> dict:
 
 def append_appflowy_text(view_id: str, text: str) -> dict:
     notify_tool_use(f"🔧📓✍️ AppFlowy tool used to append text to page {view_id}.")
+    # Signed in the tool wrapper, not the connector, so code-composed writes like
+    # the journal sync stay clean while model-authored page content carries its author
+    from connectors.llm_connector import authoring_model
+    model = authoring_model()
+    if model:
+        text = f"{text}\n· {model}"
     return connector_append_appflowy_text(view_id, text)
 
 list_appflowy_databases_tool = {

@@ -60,7 +60,7 @@ def _inline_keyboard(buttons) -> dict | None:
 		return None
 	return {"inline_keyboard": [[{"text": label, "callback_data": data} for label, data in row] for row in buttons]}
 
-def send_telegram_message(message: str, buttons=None) -> int | None:
+def send_telegram_message(message: str, buttons=None, watermark: str = "") -> int | None:
 	global _typing_stop_event
 	if _typing_stop_event:
 		_typing_stop_event.set()
@@ -72,7 +72,12 @@ def send_telegram_message(message: str, buttons=None) -> int | None:
 		message = message[:3480] + "\n\n(...truncated)"
 		print("⚙️ Message truncated to fit Telegram limits.")
 	markup = _inline_keyboard(buttons)
-	payload = {"chat_id": telegram_chat_id, "text": _to_telegram_html(message), "parse_mode": "HTML"}
+	text = _to_telegram_html(message)
+	# Appended after the markdown translation and the truncation, so the signature
+	# can neither be mangled by the formatting regexes nor cut off the end
+	if watermark:
+		text += f"\n\n<i>· {html.escape(watermark)}</i>"
+	payload = {"chat_id": telegram_chat_id, "text": text, "parse_mode": "HTML"}
 	if markup:
 		payload["reply_markup"] = markup
 	try:
@@ -84,7 +89,7 @@ def send_telegram_message(message: str, buttons=None) -> int | None:
 		# Telegram answers 400 instead of raising when the markup is off, and the message would be lost silently
 		if not response.ok:
 			print(f"⚙️ Telegram rejected the formatting, sending as plain text: {response.text}")
-			plain = {"chat_id": telegram_chat_id, "text": message}
+			plain = {"chat_id": telegram_chat_id, "text": message + (f"\n\n· {watermark}" if watermark else "")}
 			# The buttons ride along on the retry too, otherwise a formatting slip
 			# silently turns an approval card into an undecidable message
 			if markup:

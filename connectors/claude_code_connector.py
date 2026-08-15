@@ -23,6 +23,21 @@ def claude_code_enabled() -> bool:
     return os.getenv("ENABLE_CLAUDE_CODE", "false").lower() in ["true", "1", "yes"]
 
 
+# The resolved model of the last CLI run, read from the payload's modelUsage keys
+# (e.g. 'claude-sonnet-5') rather than from the requested alias, since 'sonnet' is a
+# pointer and the payload names what it actually pointed at. Held here because
+# llm_connector imports this module, not the other way around.
+_last_cli_model = {"name": ""}
+
+
+def last_cli_model() -> str:
+    return _last_cli_model["name"]
+
+
+def resolved_model_from(data: dict, requested: str) -> str:
+    return next(iter(data.get("modelUsage") or {}), "") or requested
+
+
 def read_state() -> dict:
     try:
         with open(STATE_PATH) as f:
@@ -91,7 +106,10 @@ def prompt_claude_code(text: str, model: str = "", use_tools: bool = True, origi
                 "opencapy": {
                     "command": sys.executable,
                     "args": [BRIDGE_PATH],
-                    "env": {"OPENCAPY_ORIGINAL_PROMPT": original_prompt},
+                    # The bridge runs tool calls in its own process, which can't see
+                    # this one's model record — the hint is how a comment written from
+                    # inside a CLI turn still knows who is writing it
+                    "env": {"OPENCAPY_ORIGINAL_PROMPT": original_prompt, "OPENCAPY_MODEL_HINT": model or settings["model"]},
                     # Without alwaysLoad the bridge connects asynchronously and misses the single -p turn
                     "alwaysLoad": True,
                 }
@@ -121,4 +139,5 @@ def prompt_claude_code(text: str, model: str = "", use_tools: bool = True, origi
     data = json.loads(result.stdout)
     if data.get("is_error"):
         raise RuntimeError(data.get("result"))
+    _last_cli_model["name"] = resolved_model_from(data, model or settings["model"])
     return data["result"]

@@ -351,14 +351,20 @@ def _run_coding_job(job: dict, send_message) -> None:
         if data.get("is_error"):
             raise RuntimeError(data.get("result"))
         report = data["result"].strip()
+        # Resolved from the payload and carried locally: this thread must not touch
+        # the shared model record a concurrent chat prompt may be writing to
+        from connectors.claude_code_connector import resolved_model_from
+        from connectors.llm_connector import short_model_name, watermark_enabled
+        model = short_model_name(resolved_model_from(data, os.getenv("CODER_MODEL", "opus"))) if watermark_enabled() else ""
+        signature = f"\n<p><i>· {model}</i></p>" if model else ""
         # The report lives on the task first, the chat message is just the doorbell
         report_html = "<p>" + "</p><p>".join(line for line in report.splitlines() if line.strip()) + "</p>"
         if todo:
-            append_todo_description(job["todo_id"], f"<h4>🧑‍💻 Coding agent</h4>\n{report_html}")
+            append_todo_description(job["todo_id"], f"<h4>🧑‍💻 Coding agent</h4>\n{report_html}{signature}")
             if comments_enabled():
-                add_todo_comment(job["todo_id"], f"<p>Coding agent finished.</p>\n{report_html}")
+                add_todo_comment(job["todo_id"], f"<p>Coding agent finished.</p>\n{report_html}{signature}")
         _finish(job["id"], "done")
-        send_message(f"🧑‍💻 Done with '{title}':\n{report}")
+        send_message(f"🧑‍💻 Done with '{title}':\n{report}" + (f"\n\n· {model}" if model else ""))
     except Exception as e:
         if _running["stopped"]:
             _finish(job["id"], "stopped")

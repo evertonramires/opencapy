@@ -380,7 +380,8 @@ def _append_merge_note(description: str, details_html: str) -> str:
     add_todo_context and add_subtasks can each rewrite their own block without touching
     this one."""
     head, notes_marker, notes = (description or "").partition(_capy_notes_marker)
-    item = f"<li>{datetime.now(timezone.utc).strftime('%Y-%m-%d')} — {details_html}</li>"
+    model = _watermark_model()
+    item = f"<li>{datetime.now(timezone.utc).strftime('%Y-%m-%d')} — {details_html}{f' <i>({model})</i>' if model else ''}</li>"
     before, marker, block = head.partition(_capy_merge_marker)
     if marker and "</ul>" in block:
         head = before + marker + block.replace("</ul>", f"{item}</ul>", 1)
@@ -616,6 +617,13 @@ def append_todo_description(todo_id: int, notes_html: str) -> dict:
     if not response.ok:
         return _request_error(response)
     notes_html = _normalize_model_html(notes_html)
+    model = _watermark_model()
+    if model and "<i>· " not in notes_html:
+        # Inside the block, so the wholesale replace on the next research run
+        # refreshes the signature along with the findings instead of stacking it.
+        # Skipped when the caller signed already — the coder thread brings its own,
+        # and this process's record may belong to someone else's prompt.
+        notes_html += f"\n<p><i>· researched by {model}</i></p>"
     current = response.json().get("description") or ""
     user_text = current.split(_capy_notes_marker)[0].rstrip()
     updated = f"{user_text}\n{_capy_notes_marker}\n{notes_html}" if user_text else f"{_capy_notes_marker}\n{notes_html}"
@@ -696,6 +704,12 @@ def plain_comment_text(comment_html: str) -> str:
     comment command is that no model sits between typing it and it happening."""
     return _plain_text(comment_html)
 
+def _watermark_model() -> str:
+    # Imported lazily: llm_connector is loaded by everything and must not pull the
+    # whole Vikunja module graph in at import time
+    from connectors.llm_connector import authoring_model
+    return authoring_model()
+
 def list_todo_comments(todo_id: int) -> dict:
     """The conversation held on the to-do itself, oldest first, each flagged with
     whether Capy or the user wrote it."""
@@ -723,7 +737,9 @@ def add_todo_comment(todo_id: int, comment_html: str) -> dict:
     stays attached to the task instead of scrolling away in chat."""
     if not vikunja_enabled():
         return _disabled_error()
-    body = f"{_capy_comment_header}\n{_normalize_model_html(comment_html)}\n{_capy_comment_marker}"
+    model = _watermark_model()
+    signature = f"\n<p><i>· {model}</i></p>" if model and "<i>· " not in comment_html else ""
+    body = f"{_capy_comment_header}\n{_normalize_model_html(comment_html)}{signature}\n{_capy_comment_marker}"
     response = _request("put", f"/tasks/{todo_id}/comments", json={"comment": body})
     if isinstance(response, dict):
         return response

@@ -61,6 +61,7 @@ from connectors.update_connector import run_self_update, restart_process
 from connectors.claude_code_connector import claude_code_enabled, claude_settings, set_claude_effort, set_claude_model
 from connectors.usage_connector import claude_usage, buffer_threshold_percent
 from connectors.buffer_connector import add_buffered, delete_buffered, read_buffered
+from connectors.llm_connector import pop_model_used
 from agent import prompt
 
 
@@ -100,9 +101,13 @@ def register_commands():
 def send_message(message: str, buttons=None) -> int | None:
     """Returns the Telegram message id when there is one, so callers holding a card
     with buttons can rewrite it once the user decides. The web UI has no buttons, so
-    it just receives the text and the typed command stays the way in from there."""
-    message_id = send_telegram_message(message, buttons)
-    send_api_message(message)
+    it just receives the text and the typed command stays the way in from there.
+
+    Every message that had a model behind it gets signed with that model's name,
+    popped so a mechanical message sent right after never wears a stale signature."""
+    watermark = pop_model_used()
+    message_id = send_telegram_message(message, buttons, watermark=watermark)
+    send_api_message(f"{message}\n\n· {watermark}" if watermark else message)
     return message_id
 
 def read_messages():

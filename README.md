@@ -54,6 +54,12 @@ and Claude would refuse the call anyway):
   configured, or chat above the threshold will fail.
 - When the window resets the buffer drains on its own, one item per heartbeat, so the fresh
   window isn't burned in one go.
+- With `ENABLE_MODEL_WATERMARK=true` (the default) every message, to-do comment and research
+  note is signed with the model that actually wrote it — an italic `· sonnet-5` footer in
+  Telegram, a signature line in Vikunja, a trailing line on AppFlowy pages. The name comes
+  from the API/CLI **response**, not from config, so the silent switch to the `LLM_*` model
+  above the threshold (or to `FALLBACK_LLM_*` on failure) is visible instead of a mystery.
+  Purely mechanical messages carry no signature; the journal never signs your own words.
 
 You can also park things there yourself with `/later`, for anything that is neither urgent
 nor important right now — those always wait for the next window, whatever the current usage.

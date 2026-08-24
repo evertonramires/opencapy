@@ -1,11 +1,16 @@
 import json
+import os
+import time
+from datetime import datetime, timezone
 from pathlib import Path
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from connectors.calendar_connector import create_calendar_oauth_session, complete_calendar_oauth
+from connectors.calendar_connector import create_calendar_oauth_session, complete_calendar_oauth, calendar_enabled, list_calendar_events
+from connectors.taskbook_connector import read_tasks
+from connectors.human_connector import read_human_tasks
 
 app = FastAPI()
 base_dir = Path(__file__).resolve().parent
@@ -51,6 +56,69 @@ def client_read():
 def get_memory():
     memory_path = base_dir.parent / "hood" / "memory.json"
     return json.loads(memory_path.read_text())
+
+def _panel_calendar() -> list[dict]:
+    if not calendar_enabled():
+        return []
+    # Anchor at local midnight so events that already ended still render (dimmed)
+    midnight = datetime.now().astimezone().replace(hour=0, minute=0, second=0, microsecond=0)
+    events = list_calendar_events(days_ahead=1, max_results=20, time_min=midnight)
+    if not isinstance(events, list):
+        return []
+    now = datetime.now().astimezone()
+    today = now.date()
+    rows = []
+    for event in events:
+        try:
+            start = datetime.fromisoformat(event["start"]).astimezone()
+            end = datetime.fromisoformat(event["end"]).astimezone()
+        except (ValueError, TypeError):
+            continue
+        if start.date() != today:
+            continue
+        rows.append({
+            "time": start.strftime("%H:%M"),
+            "what": event.get("summary") or "(no title)",
+            "past": end < now,
+        })
+    return rows
+
+
+def _panel_approvals() -> list[dict]:
+    approvals = []
+    for task in read_human_tasks():
+        try:
+            when_dt = datetime.strptime(task["timestamp"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc).astimezone()
+            when = when_dt.strftime("%H:%M") if when_dt.date() == datetime.now().astimezone().date() else when_dt.strftime("%b %d %H:%M")
+        except (ValueError, KeyError):
+            when = ""
+        approvals.append({
+            "kind": "question",
+            "when": when,
+            "title": task.get("title", ""),
+            "excerpt": task.get("question", ""),
+            "actions": [["Answer", f"/answer {task['id']} ", "primary"]],
+        })
+    return approvals
+
+
+_calendar_cache: dict = {"at": 0.0, "rows": None}
+
+@app.get("/panel")
+def get_panel():
+    # Only the calendar hits the Google API, so cache just that briefly;
+    # plan and approvals are cheap local file reads and must stay fresh.
+    if _calendar_cache["rows"] is None or time.time() - _calendar_cache["at"] >= 25:
+        _calendar_cache["rows"] = _panel_calendar()
+        _calendar_cache["at"] = time.time()
+    return {
+        "model": os.getenv("LLM_MODEL", "unknown"),
+        "usage": None,  # no usage tracking backend yet; the UI hides the card
+        "plan": [{"text": t["task"], "done": False} for t in read_tasks()],
+        "calendar": _calendar_cache["rows"],
+        "approvals": _panel_approvals(),
+    }
+
 
 @app.get("/commands")
 def get_commands():

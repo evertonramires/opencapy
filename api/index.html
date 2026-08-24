@@ -1,336 +1,514 @@
 <!doctype html>
-<html>
+<html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Open Capy Chat</title>
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%237c3aed'/%3E%3Ctext x='32' y='42' font-size='30' text-anchor='middle' fill='white' font-family='Arial, sans-serif'%3EC%3C/text%3E%3C/svg%3E" />
-  <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Open Capy Chat</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%237c3aed'/%3E%3Ctext x='32' y='42' font-size='30' text-anchor='middle' fill='white' font-family='Arial, sans-serif'%3EC%3C/text%3E%3C/svg%3E" />
+<style>
+/* Nocturne tokens (capy-purple accent ramp) */
+:root {
+  --color-bg: #161826;
+  --color-surface: #232532;
+  --color-text: #e9e9ed;
+  --color-divider: color-mix(in srgb, #e9e9ed 16%, transparent);
+  --color-neutral-300: #cfd3e5; --color-neutral-400: #b2b6ca; --color-neutral-500: #9397ab;
+  --color-neutral-700: #595d6c; --color-neutral-800: #3f424d; --color-neutral-900: #292b31;
+  --color-accent: #a78bfa; --color-accent-100: #ede9fe; --color-accent-300: #c4b5fd;
+  --color-accent-800: #4c1d95; --color-accent-900: #2d1b69;
+  --font: "Inter", system-ui, -apple-system, sans-serif;
+  --s1: 2.8px; --s2: 5.6px; --s3: 8.4px; --s4: 11.2px; --s6: 16.8px; --s8: 22.4px;
+  --radius: 8px;
+}
+*, *::before, *::after { box-sizing: border-box; }
+body { margin: 0; background: var(--color-bg); color: var(--color-text); font-family: var(--font); font-size: 15px; line-height: 1.55; }
+a { color: var(--color-accent-300); text-underline-offset: 3px; } a:hover { color: var(--color-accent-100); }
+:focus { outline: none; }
+:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+::selection { background: color-mix(in srgb, var(--color-accent) 30%, transparent); }
+::-webkit-scrollbar { width: 6px; } ::-webkit-scrollbar-thumb { background: var(--color-neutral-700); border-radius: 3px; }
 
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      height: 100dvh;
-      display: flex;
-      justify-content: center;
-      overflow: hidden;
-      background: #2d1b69;
-      align-items: center;
-      padding: 24px 0;
-    }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; cursor: pointer; font-family: var(--font); font-weight: 500; font-size: 14px; line-height: 1.2; color: var(--color-text); background: transparent; border: 1px solid transparent; padding: var(--s2) 10px; border-radius: var(--radius); }
+.btn svg { display: block; }
+.btn-primary { color: var(--color-accent); border-color: var(--color-accent); }
+.btn-primary:hover { background: color-mix(in srgb, var(--color-accent) 12%, transparent); }
+.btn-primary:active { background: color-mix(in srgb, var(--color-accent) 22%, transparent); }
+.btn-secondary { border-color: var(--color-divider); }
+.btn-secondary:hover { background: color-mix(in srgb, var(--color-text) 7%, transparent); }
+.btn-secondary:active { background: color-mix(in srgb, var(--color-text) 14%, transparent); }
+.btn-ghost { color: var(--color-accent); }
+.btn-ghost:hover { background: color-mix(in srgb, var(--color-accent) 10%, transparent); }
+.btn-ghost:active { background: color-mix(in srgb, var(--color-accent) 18%, transparent); }
+.btn-icon { width: 36px; height: 36px; padding: 0; }
+.btn-sm { font-size: 12px; padding: 4px 12px; }
+.input { min-height: 36px; padding: 6px 10px; font: inherit; font-size: 14px; color: var(--color-text); caret-color: var(--color-accent); background: var(--color-surface); border: 1px solid var(--color-divider); border-radius: var(--radius); }
+.input:hover { border-color: color-mix(in srgb, var(--color-text) 45%, transparent); }
+.input:focus-visible { border-color: var(--color-accent); outline-offset: 0; }
+.card { border-radius: var(--radius); background: var(--color-surface); }
+.tag { display: inline-flex; align-items: center; font-size: 11px; letter-spacing: 0.02em; padding: 3px 10px; border-radius: 6px; }
+.tag-accent { background: var(--color-accent-800); color: var(--color-accent-100); }
+.tag-outline { border: 1px solid var(--color-accent); color: var(--color-accent); }
+.kicker { font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; opacity: 0.55; }
 
-    #app {
-      display: flex;
-      flex-direction: column;
-      width: 100%;
-      max-width: 720px;
-      height: 100%;
-      background: #ede9f8;
-      border-radius: 20px;
-      overflow: hidden;
-      box-shadow: 0 8px 48px rgba(0,0,0,0.35);
-    }
+/* Shell */
+#shell { height: 100dvh; display: grid; grid-template-columns: 268px 1fr 324px; overflow: hidden; }
+.rail { display: flex; flex-direction: column; padding: var(--s6) var(--s4); overflow: hidden; }
+#left { gap: var(--s6); background: linear-gradient(to bottom, transparent, var(--color-neutral-700) 48px, var(--color-neutral-700) calc(100% - 48px), transparent) no-repeat right / 1px 100%; }
+#right { gap: var(--s4); background: linear-gradient(to bottom, transparent, var(--color-neutral-700) 48px, var(--color-neutral-700) calc(100% - 48px), transparent) no-repeat left / 1px 100%; }
 
-    @media (max-width: 480px) {
-      body { padding: 0; }
-      #app { border-radius: 0; max-width: 100%; }
-      #header { border-radius: 0; }
-      #input-area { border-radius: 0; }
-    }
+/* Left rail */
+#brand-block { height: 112px; flex-shrink: 0; display: flex; flex-direction: column; }
+#brand { display: flex; align-items: center; gap: var(--s3); }
+#avatar { width: 38px; height: 38px; border-radius: 50%; background: var(--color-accent-900) url("/assets/bot.png") center/cover; flex-shrink: 0; }
+#agent-name { font-weight: 500; font-size: 15px; }
+#model-chip { display: inline-flex; align-items: center; gap: 5px; font-size: 10px; padding: 0 7px; line-height: 1.5; margin-top: 4px; }
+#status-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--color-accent); flex-shrink: 0; }
+#search-toggle { margin-left: auto; flex-shrink: 0; }
+#search-input { display: none; width: 100%; font-size: 13px; margin-top: var(--s2); }
+#search-input.open { display: block; }
+#date-select { font-size: 13px; width: 100%; margin-top: var(--s4); border: none; background: transparent; color: var(--color-neutral-300); font-family: var(--font); padding: 4px 0; cursor: pointer; text-align: center; text-align-last: center; appearance: none; -webkit-appearance: none; }
+#date-select:hover { color: var(--color-text); }
+#plan { margin-top: var(--s4); }
+#plan-list { display: flex; flex-direction: column; gap: var(--s2); font-size: 13px; margin-top: var(--s3); }
+.plan-item { display: flex; gap: var(--s2); align-items: baseline; }
+.plan-item.done { opacity: 0.5; }
+.plan-item .box { width: 11px; height: 11px; border: 1px solid var(--color-neutral-500); border-radius: 3px; flex-shrink: 0; transform: translateY(1px); }
+.plan-item .check { color: var(--color-accent); }
+#left-spacer { flex: 1; }
 
-    /* Header */
-    #header {
-      background: white;
-      padding: 10px 16px;
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      box-shadow: 0 1px 4px rgba(109,40,217,0.10);
-      z-index: 10;
-      flex-shrink: 0;
-      border-radius: 20px 20px 0 0;
-    }
-    #header-avatar {
-      width: 40px; height: 40px; border-radius: 50%;
-      background: linear-gradient(135deg, #7c3aed, #a855f7);
-      background-image: url("/assets/bot.png");
-      background-size: cover; background-position: center;
-      flex-shrink: 0;
-    }
-    #header-name { font-weight: 600; font-size: 15px; color: #1a1a2e; }
-    #header-status { font-size: 12px; color: #7c3aed; }
+/* Usage card */
+#usage { padding: var(--s4); flex-shrink: 0; }
+.usage-row { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 6px; }
+.bar { height: 4px; border-radius: 2px; background: var(--color-neutral-700); overflow: hidden; }
+.bar > div { height: 100%; background: var(--color-accent); }
+.bar.dim > div { background: var(--color-neutral-500); }
+#usage-note { font-size: 12px; color: var(--color-neutral-400); margin-top: var(--s3); }
+#buffer-row { display: flex; justify-content: space-between; align-items: center; margin-top: var(--s3); padding-top: var(--s3); border-top: 1px solid var(--color-neutral-800); font-size: 12px; }
 
-    /* Messages area */
-    #messages {
-      flex: 1;
-      overflow-y: auto;
-      padding: 16px 12px;
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
-    }
-    #messages::-webkit-scrollbar { width: 6px; }
-    #messages::-webkit-scrollbar-thumb { background: #c4b5fd; border-radius: 3px; }
+/* Chat */
+#chat { display: flex; flex-direction: column; min-width: 0; overflow: hidden; }
+#messages { flex: 1; overflow-y: auto; padding: var(--s6) var(--s8); display: flex; flex-direction: column; gap: var(--s4); max-width: 860px; width: 100%; margin: 0 auto; }
+.day-sep { display: flex; align-items: center; gap: var(--s3); margin: var(--s2) 0; }
+.day-sep .line-l { flex: 1; height: 1px; background: linear-gradient(to right, transparent, var(--color-neutral-700)); }
+.day-sep .line-r { flex: 1; height: 1px; background: linear-gradient(to left, transparent, var(--color-neutral-700)); }
+.day-sep span { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-neutral-400); }
+.msg { display: flex; flex-direction: column; gap: 4px; max-width: 62%; }
+.msg.bot { align-self: flex-start; }
+.msg.user { align-self: flex-end; align-items: flex-end; }
+.msg .meta { font-size: 11px; color: var(--color-neutral-400); padding: 0 2px; }
+.msg .bubble { border-radius: var(--radius); padding: var(--s3) var(--s4); font-size: 14px; line-height: 1.55; word-break: break-word; }
+.msg.bot .bubble { background: var(--color-neutral-900); border: 1px solid var(--color-neutral-800); border-bottom-left-radius: 4px; }
+.msg.user .bubble { background: var(--color-accent-900); border: 1px solid var(--color-accent-800); border-bottom-right-radius: 4px; white-space: pre-wrap; }
+.msg.hidden { display: none; }
+.bubble p { margin: 0 0 6px; } .bubble p:last-child { margin: 0; }
+.bubble ul { margin: 6px 0 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; }
+.bubble code { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 13px; background: color-mix(in srgb, var(--color-text) 8%, transparent); padding: 1px 5px; border-radius: 4px; }
+.bubble pre { margin: 6px 0; padding: var(--s3); background: color-mix(in srgb, var(--color-text) 6%, transparent); border-radius: 6px; overflow-x: auto; }
+.bubble pre code { background: none; padding: 0; white-space: pre; }
 
-    /* Message rows */
-    .message { display: flex; align-items: flex-end; gap: 6px; max-width: 72%; }
-    .message.bot { align-self: flex-start; }
-    .message.user { align-self: flex-end; flex-direction: row-reverse; }
+#commands-panel { display: none; flex-direction: column; max-height: 220px; overflow-y: auto; max-width: 860px; width: 100%; margin: 0 auto; padding: 0 var(--s8); }
+#commands-panel.open { display: flex; }
+.command-item { padding: var(--s2) var(--s3); cursor: pointer; font-size: 13px; border-radius: 6px; color: var(--color-neutral-300); }
+.command-item:hover { background: color-mix(in srgb, var(--color-accent) 10%, transparent); }
+.command-item strong { color: var(--color-accent); font-weight: 500; }
 
-    /* Avatars */
-    .avatar {
-      width: 30px; height: 30px; border-radius: 50%;
-      flex-shrink: 0; background-size: cover; background-position: center;
-    }
-    .avatar.bot {
-      background-image: url("/assets/bot.png");
-      background-color: #7c3aed;
-    }
-    .avatar.user {
-      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='32' fill='%234c1d95'/%3E%3Ccircle cx='32' cy='24' r='12' fill='white'/%3E%3Cpath d='M14 54c4-10 14-16 18-16s14 6 18 16' fill='white'/%3E%3C/svg%3E");
-    }
+#composer { padding: var(--s3) var(--s8) var(--s4); max-width: 860px; width: 100%; margin: 0 auto; background: linear-gradient(to right, transparent, var(--color-neutral-700) 48px, var(--color-neutral-700) calc(100% - 48px), transparent) no-repeat top / 100% 1px; }
+#composer-row { display: flex; align-items: flex-end; gap: var(--s3); padding-top: var(--s3); }
+#message-input { flex: 1; resize: none; font-size: 14px; line-height: 1.4; max-height: 160px; }
+#composer-btns { display: flex; flex-direction: column; gap: var(--s2); }
 
-    /* Bubbles */
-    .bubble {
-      padding: 8px 12px;
-      border-radius: 18px;
-      font-size: 15px;
-      line-height: 1.5;
-      word-break: break-word;
-      white-space: pre-wrap;
-    }
-    .message.bot .bubble {
-      background: white;
-      color: #1a1a2e;
-      border-bottom-left-radius: 4px;
-      box-shadow: 0 1px 2px rgba(109,40,217,0.08);
-    }
-    .message.user .bubble {
-      background: linear-gradient(135deg, #7c3aed, #6d28d9);
-      color: white;
-      border-bottom-right-radius: 4px;
-      box-shadow: 0 1px 4px rgba(109,40,217,0.25);
-    }
-    .bubble .ts {
-      display: block;
-      font-size: 11px;
-      opacity: 0.55;
-      margin-top: 4px;
-      text-align: right;
-    }
+/* Right rail */
+#calendar { padding: 0 var(--s2); height: 112px; flex-shrink: 0; }
+#calendar-list { display: flex; flex-direction: column; gap: var(--s3); font-size: 13px; margin-top: var(--s3); }
+.cal-row { display: flex; gap: var(--s3); }
+.cal-row .time { color: var(--color-accent-300); font-variant-numeric: tabular-nums; width: 42px; flex-shrink: 0; }
+.cal-row.past .time { color: var(--color-neutral-500); }
+.cal-row.past .what { color: var(--color-neutral-400); }
+#waiting { display: flex; flex-direction: column; gap: var(--s2); min-height: 0; flex: 1; margin-top: var(--s6); }
+#waiting-head { display: flex; justify-content: space-between; align-items: baseline; padding: 0 var(--s2); margin-bottom: 4px; }
+#waiting-list { display: flex; flex-direction: column; gap: var(--s2); overflow-y: auto; min-height: 0; flex: 1; }
+.appr { padding: var(--s3) var(--s4); flex-shrink: 0; }
+.appr .head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 4px; }
+.appr .when { font-size: 11px; color: var(--color-neutral-500); }
+.appr .title { font-size: 13px; margin-bottom: 4px; }
+.appr .excerpt { font-size: 12px; color: var(--color-neutral-400); line-height: 1.5; margin-bottom: var(--s3); }
+.appr .actions { display: flex; gap: var(--s2); }
+.empty { font-size: 12px; color: var(--color-neutral-500); padding: 0 var(--s2); }
 
-    /* Date separator */
-    .date-sep {
-      align-self: center;
-      font-size: 12px;
-      color: #6d28d9;
-      background: #ede9f8;
-      border: 1px solid #ddd6fe;
-      border-radius: 12px;
-      padding: 2px 10px;
-      margin: 10px 0 6px;
-    }
-
-    /* Input area */
-    #input-area {
-      background: white;
-      padding: 10px 12px;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      box-shadow: 0 -1px 4px rgba(109,40,217,0.08);
-      flex-shrink: 0;
-      border-radius: 0 0 20px 20px;
-    }
-    #message-input {
-      flex: 1;
-      border: none;
-      background: #f3f0ff;
-      border-radius: 22px;
-      padding: 10px 16px;
-      font-size: 15px;
-      outline: none;
-      color: #1a1a2e;
-      resize: none;
-      max-height: 120px;
-      line-height: 1.4;
-    }
-    #message-input::placeholder { color: #a78bfa; }
-    #send-btn {
-      width: 42px; height: 42px; border-radius: 50%;
-      background: linear-gradient(135deg, #7c3aed, #6d28d9);
-      border: none; cursor: pointer;
-      display: flex; align-items: center; justify-content: center;
-      flex-shrink: 0;
-      transition: opacity 0.15s;
-    }
-    #send-btn:hover { opacity: 0.88; }
-    #send-btn:active { opacity: 0.75; }
-
-    #commands-btn {
-      width: 36px; height: 36px; border-radius: 50%;
-      background: #f3f0ff;
-      border: none; cursor: pointer;
-      display: flex; align-items: center; justify-content: center;
-      flex-shrink: 0; font-size: 18px; font-weight: bold; color: #7c3aed;
-      transition: background 0.15s;
-    }
-    #commands-btn:hover { background: #ddd6fe; }
-
-    #commands-panel {
-      display: none;
-      flex-direction: column;
-      background: white;
-      border-top: 1px solid #ddd6fe;
-      max-height: 220px;
-      overflow-y: auto;
-      flex-shrink: 0;
-    }
-    #commands-panel.open { display: flex; }
-    .command-item {
-      padding: 8px 16px;
-      cursor: pointer;
-      border-bottom: 1px solid #f3f0ff;
-      font-size: 14px;
-      color: #1a1a2e;
-    }
-    .command-item:hover { background: #f3f0ff; }
-    .command-item strong { color: #7c3aed; }
-  </style>
+@media (max-width: 1100px) { #shell { grid-template-columns: 1fr; } .rail { display: none; } }
+</style>
 </head>
 <body>
-  <div id="app">
-  <div id="header">
-    <div id="header-avatar"></div>
-    <div>
-      <div id="header-name">Capy</div>
-      <div id="header-status">online</div>
+<div id="shell">
+
+  <aside id="left" class="rail">
+    <div id="brand-block">
+      <div id="brand">
+        <div id="avatar"></div>
+        <div style="display:flex; flex-direction:column; align-items:flex-start;">
+          <div id="agent-name">Open Capy</div>
+          <span id="model-chip" class="tag tag-outline" title="online"><span id="status-dot"></span><span id="model-name">online</span></span>
+        </div>
+        <button id="search-toggle" class="btn btn-icon btn-ghost" title="Search the transcript">
+          <svg width="15" height="15" viewBox="0 0 256 256" fill="currentColor"><path d="M229.66,218.34l-50.07-50.06a88.11,88.11,0,1,0-11.31,11.31l50.06,50.07a8,8,0,0,0,11.32-11.32ZM40,112a72,72,0,1,1,72,72A72.08,72.08,0,0,1,40,112Z"/></svg>
+        </button>
+      </div>
+      <input id="search-input" class="input" placeholder="Search the transcript" />
+      <select id="date-select" title="Jump to date"></select>
     </div>
-  </div>
 
-  <div id="messages">
-    <div class="date-sep">Today</div>
-  </div>
+    <section id="plan">
+      <div class="kicker">Today's plan</div>
+      <div id="plan-list"></div>
+    </section>
 
-  <div id="commands-panel"></div>
+    <div id="left-spacer"></div>
 
-  <div id="input-area">
-    <button id="commands-btn" type="button">/</button>
-    <textarea id="message-input" rows="1" placeholder="Message..."></textarea>
-    <button id="send-btn" type="button">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="white">
-        <path d="M2 21l21-9L2 3v7l15 2-15 2v7z"/>
-      </svg>
-    </button>
-  </div>
+    <section id="usage" class="card">
+      <div class="kicker" id="usage-title" style="margin-bottom: var(--s3);">Usage</div>
+      <div id="usage-bars"></div>
+      <div id="usage-note"></div>
+      <div id="buffer-row">
+        <span><strong id="buffer-count" style="font-weight:500;">0</strong> items buffered for the next window</span>
+        <button class="btn btn-ghost btn-sm" data-cmd="/listbuffer">/listbuffer</button>
+      </div>
+    </section>
+  </aside>
 
-  </div> <!-- #app -->
+  <main id="chat">
+    <div id="messages"></div>
+    <div id="commands-panel"></div>
+    <div id="composer">
+      <div id="composer-row">
+        <textarea id="message-input" class="input" rows="2" placeholder="Message Capy — / for commands"></textarea>
+        <div id="composer-btns">
+          <button id="commands-btn" class="btn btn-icon btn-ghost" title="Commands" style="font-weight:600;">/</button>
+          <button id="send-btn" class="btn btn-primary btn-icon" title="Send">
+            <svg width="16" height="16" viewBox="0 0 256 256" fill="currentColor"><path d="M221.66,133.66l-72,72a8,8,0,0,1-11.32-11.32L196.69,136H40a8,8,0,0,1,0-16H196.69L138.34,61.66a8,8,0,0,1,11.32-11.32l72,72A8,8,0,0,1,221.66,133.66Z"/></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+  </main>
 
-  <script>
-    const messages = document.getElementById("messages");
-    const input = document.getElementById("message-input");
-    const sendBtn = document.getElementById("send-btn");
-    const apiBase = "";
+  <aside id="right" class="rail">
+    <section id="calendar">
+      <div class="kicker">Calendar · today</div>
+      <div id="calendar-list"></div>
+    </section>
+    <section id="waiting">
+      <div id="waiting-head">
+        <div class="kicker">Waiting on you</div>
+        <span id="waiting-count" class="tag tag-accent">0 waiting</span>
+      </div>
+      <div id="waiting-list"></div>
+    </section>
+  </aside>
 
-    const statusEl = document.getElementById("header-status");
+</div>
 
-    async function loadHistory() {
-      const res = await fetch(`${apiBase}/memory`);
-      const data = await res.json();
-      for (const m of data.memory) {
-        if (m.memory.startsWith("[system]")) continue;
-        const who = m.person === "user" ? "user" : "bot";
-        const ts = new Date(m.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-        addMessage(m.memory.replace(/^User said: /, ""), who, false, ts);
-      }
+<script>
+const apiBase = "";
+const $ = (id) => document.getElementById(id);
+
+/* ── Panel data ─────────────────────────────────────────────────────────
+   Panels render from GET /panel (polled every 30s). DEMO below is only
+   the offline fallback so the layout is reviewable without a backend. */
+const DEMO = {
+  model: "sonnet-5",
+  usage: {
+    mode: "subscription", // or "api-key"
+    fiveHourPct: 68, sevenDayPct: 31, resets: "12:40",
+    dailySpent: 3.40, dailyBudget: 8.00, // api-key mode (Bifrost)
+    buffered: 3,
+  },
+  plan: [
+    { text: "Reply to Ana about the trip", done: true },
+    { text: "Call the dentist to book a cleaning", done: false },
+    { text: "Start the passport renewal form", done: false },
+  ],
+  calendar: [
+    { time: "11:00", what: "Team sync", past: false },
+    { time: "15:30", what: "Dentist call window", past: false },
+    { time: "19:00", what: "Gym", past: true },
+  ],
+  approvals: [
+    { kind: "email", when: "09:32", title: "Ana — trip dates",
+      excerpt: "\u201CHi Ana! June 12\u201319 works on my end. Shall I book the\u2026\u201D",
+      actions: [["Send", "/approve 1", "primary"], ["Change", "/tweak 1 ", "secondary"], ["Drop", "/reject 1", "ghost"]] },
+    { kind: "coding agent", when: "08:47", title: "Gather links for the tax return",
+      excerpt: "Offered — runs Claude Code on this machine · 1 of 2 today · to-do #24 in Vikunja",
+      actions: [["Start", "/aicode 24", "primary"], ["Dismiss", "/stopcode 24", "ghost"]] },
+    { kind: "sms", when: "Yesterday 18:04", title: "Dentist — reschedule",
+      excerpt: "\u201CHi, could I move Thursday's cleaning to next week? An\u2026\u201D",
+      actions: [["Send", "/approve 2", "primary"], ["Change", "/tweak 2 ", "secondary"], ["Drop", "/reject 2", "ghost"]] },
+  ],
+};
+
+/* ── Markdown-lite (bot bubbles): escape, then **bold**, `code`, - lists ── */
+function esc(s) { return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+function md(text) {
+  const inline = (s) => esc(s)
+    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+    .replace(/`([^`]+)`/g, "<code>$1</code>");
+  const out = []; let list = null; let fence = null;
+  for (const line of text.split("\n")) {
+    if (fence !== null) {
+      if (/^\s*```/.test(line)) { out.push("<pre><code>" + esc(fence.join("\n")) + "</code></pre>"); fence = null; }
+      else fence.push(line);
+      continue;
     }
-    loadHistory();
+    if (/^\s*```/.test(line)) { if (list) { out.push("<ul>" + list.join("") + "</ul>"); list = null; } fence = []; continue; }
+    const m = line.match(/^\s*[-•]\s+(.*)/);
+    if (m) { if (!list) { list = []; } list.push("<li>" + inline(m[1]) + "</li>"); continue; }
+    if (list) { out.push("<ul>" + list.join("") + "</ul>"); list = null; }
+    if (line.trim()) out.push("<p>" + inline(line) + "</p>");
+  }
+  if (fence !== null) out.push("<pre><code>" + esc(fence.join("\n")) + "</code></pre>");
+  if (list) out.push("<ul>" + list.join("") + "</ul>");
+  return out.join("");
+}
 
-    function addMessage(text, who, save = true, time = null) {
-      const ts = time || new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-      const row = document.createElement("div");
-      row.className = `message ${who}`;
+/* ── Messages + day separators ────────────────────────────────────────── */
+const messages = $("messages");
+const dateSelect = $("date-select");
+const seenDays = new Map(); // dayKey -> separator element
+function dayKey(d) { return d.toDateString(); }
+function dayLabel(d) {
+  const today = new Date(), yd = new Date(Date.now() - 864e5);
+  if (dayKey(d) === dayKey(today)) return "Today";
+  if (dayKey(d) === dayKey(yd)) return "Yesterday";
+  return d.toLocaleDateString([], { month: "short", day: "numeric" });
+}
+function ensureDaySep(d) {
+  const key = dayKey(d);
+  if (seenDays.has(key)) return;
+  const sep = document.createElement("div");
+  sep.className = "day-sep";
+  sep.innerHTML = '<div class="line-l"></div><span>' + esc(dayLabel(d)) + '</span><div class="line-r"></div>';
+  messages.appendChild(sep);
+  seenDays.set(key, sep);
+  const opt = document.createElement("option");
+  opt.value = key; opt.textContent = dayLabel(d);
+  dateSelect.appendChild(opt);
+}
+function addMessage(text, who, date) {
+  const d = date || new Date();
+  ensureDaySep(d);
+  const row = document.createElement("div");
+  row.className = "msg " + who;
+  const ts = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const sender = who === "bot" ? "Capy (" + modelName + ")" : "You";
+  const meta = document.createElement("div");
+  meta.className = "meta"; meta.textContent = sender + " · " + ts;
+  const bubble = document.createElement("div");
+  bubble.className = "bubble";
+  if (who === "bot") bubble.innerHTML = md(text); else bubble.textContent = text;
+  row.append(meta, bubble);
+  row.dataset.text = text.toLowerCase();
+  messages.appendChild(row);
+  messages.scrollTop = messages.scrollHeight;
+}
 
-      const avatar = document.createElement("div");
-      avatar.className = `avatar ${who}`;
+/* ── Date line: resting label is now; changing jumps to that day ──────── */
+let modelName = "…";
+function setNowLabel() {
+  const now = new Date();
+  const label = now.toLocaleDateString([], { month: "short", day: "numeric" }) + " · " +
+    now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  let opt = dateSelect.querySelector("option[data-now]");
+  if (!opt) {
+    opt = document.createElement("option");
+    opt.setAttribute("data-now", "1"); opt.value = "";
+    dateSelect.prepend(opt);
+  }
+  opt.textContent = label;
+  if (!dateSelect.value) dateSelect.selectedIndex = 0;
+}
+setNowLabel(); setInterval(setNowLabel, 30000);
+dateSelect.addEventListener("change", () => {
+  const sep = seenDays.get(dateSelect.value);
+  if (sep) messages.scrollTop = sep.offsetTop - messages.offsetTop;
+  dateSelect.selectedIndex = 0;
+});
 
-      const bubble = document.createElement("div");
-      bubble.className = "bubble";
-      bubble.textContent = text;
+/* ── Transcript search ────────────────────────────────────────────────── */
+const searchInput = $("search-input");
+$("search-toggle").addEventListener("click", () => {
+  searchInput.classList.toggle("open");
+  if (searchInput.classList.contains("open")) searchInput.focus();
+  else { searchInput.value = ""; filterMessages(""); }
+});
+searchInput.addEventListener("input", () => filterMessages(searchInput.value.trim().toLowerCase()));
+function filterMessages(q) {
+  for (const row of messages.querySelectorAll(".msg"))
+    row.classList.toggle("hidden", !!q && !row.dataset.text.includes(q));
+}
 
-      const tsEl = document.createElement("span");
-      tsEl.className = "ts";
-      tsEl.textContent = ts;
-      bubble.appendChild(tsEl);
-
-      row.appendChild(avatar);
-      row.appendChild(bubble);
-      messages.appendChild(row);
-      messages.scrollTop = messages.scrollHeight;
+/* ── Chat wiring (same endpoints as before) ───────────────────────────── */
+const input = $("message-input");
+const statusDot = $("status-dot");
+async function loadHistory() {
+  try {
+    const res = await fetch(apiBase + "/memory");
+    const data = await res.json();
+    for (const m of data.memory) {
+      if (m.memory.startsWith("[system]")) continue;
+      const who = m.person === "user" ? "user" : "bot";
+      addMessage(m.memory.replace(/^User said: /, ""), who, new Date(m.timestamp));
     }
+  } catch (e) { demoTranscript(); }
+}
+async function sendMessage(text) {
+  try {
+    await fetch(apiBase + "/inbox", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: text }),
+    });
+  } catch (e) { /* offline */ }
+}
+async function pollMessages() {
+  try {
+    const res = await fetch(apiBase + "/outbox");
+    const data = await res.json();
+    for (const m of data.messages) addMessage(m, "bot");
+    if (data.messages.length > 0) statusDot.style.background = "var(--color-accent)";
+  } catch (e) { /* offline */ }
+}
+function submit() {
+  const text = input.value.trim();
+  if (!text) return;
+  addMessage(text, "user");
+  input.value = ""; input.style.height = "auto";
+  statusDot.style.background = "var(--color-neutral-500)"; // thinking
+  sendMessage(text);
+}
+$("send-btn").addEventListener("click", submit);
+input.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); }
+});
+input.addEventListener("input", () => { input.style.height = "auto"; input.style.height = input.scrollHeight + "px"; });
+/* History and outbox polling start after the first /panel fetch (see
+   loadPanels below) so sender lines already know the model name. */
 
-    async function sendMessage(text) {
-      await fetch(`${apiBase}/inbox`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: text })
+/* ── Commands palette ─────────────────────────────────────────────────── */
+const commandsPanel = $("commands-panel");
+$("commands-btn").addEventListener("click", async () => {
+  if (!commandsPanel.dataset.loaded) {
+    let cmds = [];
+    try { cmds = (await (await fetch(apiBase + "/commands")).json()).commands; }
+    catch (e) { cmds = [{ command: "help", description: "Get the content of the README file" }]; }
+    for (const cmd of cmds) {
+      const item = document.createElement("div");
+      item.className = "command-item";
+      item.innerHTML = "<strong>/" + esc(cmd.command) + "</strong> — " + esc(cmd.description);
+      item.addEventListener("click", () => {
+        input.value = "/" + cmd.command + " "; input.focus();
+        commandsPanel.classList.remove("open");
       });
+      commandsPanel.appendChild(item);
     }
+    commandsPanel.dataset.loaded = "1";
+  }
+  commandsPanel.classList.toggle("open");
+});
 
-    async function pollMessages() {
-      const res = await fetch(`${apiBase}/outbox`);
-      const data = await res.json();
-      for (const msg of data.messages) addMessage(msg, "bot");
-      if (data.messages.length > 0) statusEl.textContent = "online";
-    }
+/* ── Panels ───────────────────────────────────────────────────────────── */
+function renderPanels(d) {
+  modelName = d.model;
+  $("model-name").textContent = d.model;
+  const plan = $("plan-list");
+  plan.innerHTML = "";
+  if (!d.plan.length) plan.innerHTML = '<div class="empty">Nothing planned yet</div>';
+  for (const p of d.plan) {
+    const row = document.createElement("div");
+    row.className = "plan-item" + (p.done ? " done" : "");
+    row.innerHTML = p.done
+      ? '<span class="check">✓</span><s>' + esc(p.text) + "</s>"
+      : '<span class="box"></span>' + esc(p.text);
+    plan.appendChild(row);
+  }
+  const cal = $("calendar-list");
+  cal.innerHTML = "";
+  if (!d.calendar.length) cal.innerHTML = '<div class="empty">Nothing scheduled today</div>';
+  for (const ev of d.calendar) {
+    const row = document.createElement("div");
+    row.className = "cal-row" + (ev.past ? " past" : "");
+    row.innerHTML = '<span class="time">' + esc(ev.time) + '</span><span class="what">' + esc(ev.what) + "</span>";
+    cal.appendChild(row);
+  }
+  $("waiting-count").textContent = d.approvals.length + " waiting";
+  const list = $("waiting-list");
+  list.innerHTML = "";
+  if (!d.approvals.length) list.innerHTML = '<div class="empty">Nothing waiting on you</div>';
+  for (const a of d.approvals) {
+    const card = document.createElement("div");
+    card.className = "card appr";
+    card.innerHTML =
+      '<div class="head"><span class="tag tag-outline">' + esc(a.kind) + '</span><span class="when">' + esc(a.when) + "</span></div>" +
+      '<div class="title">' + esc(a.title) + "</div>" +
+      '<div class="excerpt">' + esc(a.excerpt) + "</div>" +
+      '<div class="actions">' + a.actions.map(([label, cmd, kind]) =>
+        '<button class="btn btn-sm btn-' + kind + '" data-cmd="' + esc(cmd) + '">' + esc(label) + "</button>").join("") +
+      "</div>";
+    list.appendChild(card);
+  }
+  const u = d.usage, bars = $("usage-bars");
+  $("usage").style.display = u ? "" : "none";
+  if (!u) return;
+  if (u.mode === "subscription") {
+    $("usage-title").textContent = "Usage · Claude subscription";
+    bars.innerHTML =
+      '<div class="usage-row"><span>5-hour window</span><span style="color:var(--color-accent-300)">' + u.fiveHourPct + '%</span></div>' +
+      '<div class="bar"><div style="width:' + u.fiveHourPct + '%"></div></div>' +
+      '<div class="usage-row" style="margin-top:var(--s3)"><span>7-day window</span><span style="color:var(--color-neutral-400)">' + u.sevenDayPct + '%</span></div>' +
+      '<div class="bar dim"><div style="width:' + u.sevenDayPct + '%"></div></div>';
+    $("usage-note").textContent = "Resets " + u.resets + " · background work buffers at 80%";
+  } else {
+    $("usage-title").textContent = "Usage · API key via Bifrost";
+    const pct = Math.round((u.dailySpent / u.dailyBudget) * 100);
+    bars.innerHTML =
+      '<div class="usage-row"><span>Daily budget</span><span style="color:var(--color-accent-300)">$' + u.dailySpent.toFixed(2) + " / $" + u.dailyBudget.toFixed(2) + "</span></div>" +
+      '<div class="bar"><div style="width:' + pct + '%"></div></div>';
+    $("usage-note").textContent = "Budget resets at midnight · background work buffers at 80% spent";
+  }
+  $("buffer-count").textContent = u.buffered;
+}
+async function loadPanels() {
+  try {
+    const res = await fetch(apiBase + "/panel");
+    if (!res.ok) throw new Error(res.status);
+    renderPanels(await res.json());
+  } catch (e) { if (!loadPanels.rendered) renderPanels(DEMO); }
+  loadPanels.rendered = true;
+}
+loadPanels().then(() => {
+  loadHistory();
+  pollMessages();
+  setInterval(pollMessages, 3000);
+});
+setInterval(loadPanels, 30000);
 
-    function submit() {
-      const text = input.value.trim();
-      if (!text) return;
-      addMessage(text, "user");
-      input.value = "";
-      input.style.height = "auto";
-      statusEl.textContent = "typing...";
-      sendMessage(text);
-    }
+/* Panel buttons send their slash command through the chat. Commands ending
+   in a space (e.g. "/tweak 1 ") are placed in the input for you to finish. */
+document.addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-cmd]");
+  if (!btn) return;
+  const cmd = btn.dataset.cmd;
+  if (cmd.endsWith(" ")) { input.value = cmd; input.focus(); }
+  else { input.value = cmd; submit(); }
+});
 
-    sendBtn.addEventListener("click", submit);
-
-    input.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); }
-    });
-
-    // Auto-grow textarea
-    input.addEventListener("input", () => {
-      input.style.height = "auto";
-      input.style.height = input.scrollHeight + "px";
-    });
-
-    setInterval(pollMessages, 3000);
-    pollMessages();
-
-    const commandsBtn = document.getElementById("commands-btn");
-    const commandsPanel = document.getElementById("commands-panel");
-
-    commandsBtn.addEventListener("click", async () => {
-      if (!commandsPanel.dataset.loaded) {
-        const res = await fetch(`${apiBase}/commands`);
-        const data = await res.json();
-        for (const cmd of data.commands) {
-          const item = document.createElement("div");
-          item.className = "command-item";
-          item.innerHTML = `<strong>/${cmd.command}</strong> — ${cmd.description}`;
-          item.addEventListener("click", () => {
-            input.value = `/${cmd.command} `;
-            input.focus();
-            commandsPanel.classList.remove("open");
-          });
-          commandsPanel.appendChild(item);
-        }
-        commandsPanel.dataset.loaded = "1";
-      }
-      commandsPanel.classList.toggle("open");
-    });
-  </script>
+/* Offline demo transcript so the layout can be reviewed without a backend */
+function demoTranscript() {
+  const day = (offset, h, m) => { const d = new Date(); d.setDate(d.getDate() + offset); d.setHours(h, m, 0, 0); return d; };
+  addMessage("Evening check-in: which 3 tasks do you want to do first tomorrow, and what are 3 things you achieved today — however small?", "bot", day(-1, 21, 2));
+  addMessage("tomorrow: ana, dentist, passport. wins: inbox zero, finished the sprint, cooked", "user", day(-1, 21, 10));
+  addMessage("Morning! Your own three picks for today:\n- **Reply to Ana about the trip** — 🍅 1\n- Call the dentist to book a cleaning\n- Start the passport renewal form\nSuggested starter: open Ana's last message and write one sentence. Two minutes.", "bot", day(0, 8, 2));
+  addMessage("/sprint 21", "user", day(0, 9, 15));
+  addMessage("Sprint 3 started: **25 minutes** on \u201CReply to Ana about the trip\u201D. I'll check in when time is up.", "bot", day(0, 9, 15));
+  addMessage("Time's up on sprint 3 — how did it go? Reply `/sprintdone 3`, `/sprintmore 3 10` or `/sprintstuck 3`.", "bot", day(0, 9, 41));
+}
+</script>
 </body>
 </html>

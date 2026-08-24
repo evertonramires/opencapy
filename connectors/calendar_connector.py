@@ -270,7 +270,7 @@ def calendar_today() -> list[dict] | dict | bool:
     _save_calendar_daily_check_date(today)
     return list_calendar_events(days_ahead=1, max_results=100)
 
-def list_calendar_events(days_ahead: int = 7, max_results: int = 10) -> list[dict] | dict:
+def list_calendar_events(days_ahead: int = 7, max_results: int = 10, time_min: datetime | None = None) -> list[dict] | dict:
     if not calendar_enabled():
         return {
             "status": "error",
@@ -287,9 +287,9 @@ def list_calendar_events(days_ahead: int = 7, max_results: int = 10) -> list[dic
     token_result = _oauth_access_token()
     if token_result["status"] == "error":
         return token_result
-    now = datetime.now(timezone.utc)
-    time_min = now.isoformat().replace("+00:00", "Z")
-    time_max = (now + timedelta(days=days_ahead)).isoformat().replace("+00:00", "Z")
+    start = (time_min or datetime.now(timezone.utc)).astimezone(timezone.utc)
+    time_min = start.isoformat().replace("+00:00", "Z")
+    time_max = (start + timedelta(days=days_ahead)).isoformat().replace("+00:00", "Z")
     response = requests.get(
         _calendar_url(calendar_id),
         headers=_calendar_headers(token_result["access_token"]),

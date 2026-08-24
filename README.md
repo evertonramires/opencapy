@@ -129,6 +129,17 @@ uv run main.py
 2) Navigate to [Chat Page](http://localhost:8000/) and
 3) Just chat around or use one of the commands below.
 
+### Webchat
+
+The chat page (`api/index.html`) is a single-file desktop UI, no build step:
+
+- Three-column layout: left rail (agent identity, transcript search, jump-to-date, today's plan, usage), center chat, right rail (today's calendar, "Waiting on you" queue). Under 1100px wide the rails hide and you get the mobile-style chat only.
+- Panels are fed by `GET /panel` (polled every 30s), which returns `{model, usage, plan, calendar, approvals}` built from `.env`'s `LLM_MODEL`, the taskbook, Google Calendar (when `ENABLE_CALENDAR=true`), and pending human-escalation tasks. `usage` is `null` until a usage-tracking backend exists, which hides the usage card.
+- Approval cards send real slash commands through the chat (e.g. `Answer` prefills `/answer <id> `).
+- If the backend is unreachable, a demo transcript and demo panels render so the layout is still reviewable.
+
+To reach it from other devices (e.g. over Tailscale), set `CHAT_API_BIND_HOST=0.0.0.0` in `.env` and open port 8000 on that machine's IP.
+
 ### Commands
 
 Tasks/Reminders:

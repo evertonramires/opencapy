@@ -397,6 +397,8 @@ def read_messages():
                     task_description = task.get("description", "")
                     original_user_prompt = task.get("original_user_prompt", "")
                     send_message(f"✅ Answer received for pending task [ {task_id} ] ({task_title}). Continuing now...")
+                    # Delete before the (slow) prompt so a second /answer can't re-run it
+                    delete_human_task(task_id)
                     response = prompt(
                         f"[system] Human answered your pending clarification task.\n\n"
                         f"Task ID: {task['id']}\n"
@@ -409,7 +411,6 @@ def read_messages():
                         f"Continue from where you stopped and respond to the user."
                     )
                     send_message(response)
-                    delete_human_task(task_id)
                 except Exception as e:
                     send_message(f"Sorry, I couldn't process your answer, can we try again? Details: {e}")
             elif _is_command(message, "/sprint"):

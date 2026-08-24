@@ -293,12 +293,19 @@ function ensureDaySep(d) {
   dateSelect.appendChild(opt);
 }
 function addMessage(text, who, date) {
+  let model = modelName;
+  if (who === "bot") {
+    // Messages arrive signed "\n\n· <model>" (ENABLE_MODEL_WATERMARK);
+    // lift the signature into the sender line instead of the bubble
+    const wm = text.match(/\n\n· ([^\n]+)$/);
+    if (wm) { model = wm[1]; text = text.slice(0, wm.index); }
+  }
   const d = date || new Date();
   ensureDaySep(d);
   const row = document.createElement("div");
   row.className = "msg " + who;
   const ts = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  const sender = who === "bot" ? "Capy (" + modelName + ")" : "You";
+  const sender = who === "bot" ? "Capy (" + model + ")" : "You";
   const meta = document.createElement("div");
   meta.className = "meta"; meta.textContent = sender + " · " + ts;
   const bubble = document.createElement("div");
@@ -447,7 +454,8 @@ function renderPanels(d) {
     card.innerHTML =
       '<div class="head"><span class="tag tag-outline">' + esc(a.kind) + '</span><span class="when">' + esc(a.when) + "</span></div>" +
       '<div class="title">' + esc(a.title) + "</div>" +
-      '<div class="excerpt">' + esc(a.excerpt) + "</div>" +
+      '<div class="excerpt">' + esc(a.excerpt) +
+        (a.link ? ' <a href="' + esc(a.link) + '" target="_blank" rel="noopener">open to-do →</a>' : "") + "</div>" +
       '<div class="actions">' + a.actions.map(([label, cmd, kind]) =>
         '<button class="btn btn-sm btn-' + kind + '" data-cmd="' + esc(cmd) + '">' + esc(label) + "</button>").join("") +
       "</div>";
@@ -463,7 +471,7 @@ function renderPanels(d) {
       '<div class="bar"><div style="width:' + u.fiveHourPct + '%"></div></div>' +
       '<div class="usage-row" style="margin-top:var(--s3)"><span>7-day window</span><span style="color:var(--color-neutral-400)">' + u.sevenDayPct + '%</span></div>' +
       '<div class="bar dim"><div style="width:' + u.sevenDayPct + '%"></div></div>';
-    $("usage-note").textContent = "Resets " + u.resets + " · background work buffers at 80%";
+    $("usage-note").textContent = "Resets in " + u.resets + " · background work buffers at " + (u.threshold || 80) + "%";
   } else {
     $("usage-title").textContent = "Usage · API key via Bifrost";
     const pct = Math.round((u.dailySpent / u.dailyBudget) * 100);

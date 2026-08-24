@@ -1,7 +1,7 @@
 import json
 import os
 import time
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi import FastAPI
@@ -9,8 +9,13 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from connectors.calendar_connector import create_calendar_oauth_session, complete_calendar_oauth, calendar_enabled, list_calendar_events
-from connectors.taskbook_connector import read_tasks
 from connectors.human_connector import read_human_tasks
+from connectors.approval_connector import read_approvals
+from connectors.coder_connector import coder_enabled, read_coding_work
+from connectors.journal_connector import journal_enabled, read_journal
+from connectors.usage_connector import claude_usage, buffer_threshold_percent
+from connectors.buffer_connector import read_buffered
+from connectors.claude_code_connector import claude_code_enabled, claude_settings
 
 app = FastAPI()
 base_dir = Path(__file__).resolve().parent
@@ -84,37 +89,103 @@ def _panel_calendar() -> list[dict]:
     return rows
 
 
+def _panel_when(value: str) -> str:
+    try:
+        when_dt = datetime.fromisoformat(value.replace("Z", "+00:00")).astimezone()
+    except (ValueError, TypeError, AttributeError):
+        return ""
+    if when_dt.date() == datetime.now().astimezone().date():
+        return when_dt.strftime("%H:%M")
+    return when_dt.strftime("%b %d %H:%M")
+
+
 def _panel_approvals() -> list[dict]:
-    approvals = []
+    rows = []
+    for approval in read_approvals():
+        summary_lines = (approval.get("summary") or "").strip().split("\n")
+        rows.append({
+            "kind": approval.get("label", "draft"),
+            "when": _panel_when(approval.get("created_at", "")),
+            "title": summary_lines[0][:80],
+            "excerpt": " ".join(summary_lines[1:]).strip()[:140],
+            "actions": [
+                ["Send", f"/approve {approval['id']}", "primary"],
+                ["Change", f"/tweak {approval['id']}", "secondary"],
+                ["Drop", f"/reject {approval['id']}", "ghost"],
+            ],
+        })
+    if coder_enabled():
+        work = read_coding_work()
+        vikunja_host = os.getenv("VIKUNJA_API_HOST", "").strip().rstrip("/")
+        for offer in work["offers"]:
+            rows.append({
+                "kind": "coding agent",
+                "when": _panel_when(offer.get("offered_at", "")),
+                "title": offer["goal"][:80],
+                "excerpt": f"Offered — runs Claude Code on this machine · {work['done_today']} of {work['max_per_day']} today",
+                "link": f"{vikunja_host}/tasks/{offer['todo_id']}" if vikunja_host else "",
+                "actions": [
+                    ["Start", f"/aicode {offer['todo_id']}", "primary"],
+                    ["Dismiss", f"/stopcode {offer['todo_id']}", "ghost"],
+                ],
+            })
     for task in read_human_tasks():
-        try:
-            when_dt = datetime.strptime(task["timestamp"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc).astimezone()
-            when = when_dt.strftime("%H:%M") if when_dt.date() == datetime.now().astimezone().date() else when_dt.strftime("%b %d %H:%M")
-        except (ValueError, KeyError):
-            when = ""
-        approvals.append({
+        rows.append({
             "kind": "question",
-            "when": when,
+            "when": _panel_when(task.get("timestamp", "")),
             "title": task.get("title", ""),
             "excerpt": task.get("question", ""),
             "actions": [["Answer", f"/answer {task['id']} ", "primary"]],
         })
-    return approvals
+    return rows
+
+
+def _panel_usage() -> dict | None:
+    if not claude_code_enabled():
+        return None
+    usage = claude_usage()
+    if usage.get("status") != "success":
+        return None
+    return {
+        "mode": "subscription",
+        "fiveHourPct": round(usage["five_hour_percent"]),
+        "sevenDayPct": round(usage["seven_day_percent"]),
+        "resets": usage["five_hour_resets_in"],
+        "buffered": len(read_buffered()),
+        "threshold": buffer_threshold_percent(),
+    }
+
+
+def _panel_plan() -> list[dict]:
+    if not journal_enabled():
+        return []
+    journal = read_journal()
+    if journal.get("status") != "success":
+        return []
+    # The journal records picks, not completions, so nothing renders as done yet
+    return [{"text": text, "done": False} for text in journal["plan"]]
+
+
+def _panel_model() -> str:
+    if claude_code_enabled():
+        return claude_settings()["model"]
+    return os.getenv("LLM_MODEL", "unknown")
 
 
 _calendar_cache: dict = {"at": 0.0, "rows": None}
 
 @app.get("/panel")
 def get_panel():
-    # Only the calendar hits the Google API, so cache just that briefly;
-    # plan and approvals are cheap local file reads and must stay fresh.
+    # Only the calendar hits the Google API on every build; cache just that briefly.
+    # Approvals, plan and buffer are cheap local file reads and must stay fresh
+    # (usage_connector keeps its own cache for the Anthropic usage API).
     if _calendar_cache["rows"] is None or time.time() - _calendar_cache["at"] >= 25:
         _calendar_cache["rows"] = _panel_calendar()
         _calendar_cache["at"] = time.time()
     return {
-        "model": os.getenv("LLM_MODEL", "unknown"),
-        "usage": None,  # no usage tracking backend yet; the UI hides the card
-        "plan": [{"text": t["task"], "done": False} for t in read_tasks()],
+        "model": _panel_model(),
+        "usage": _panel_usage(),
+        "plan": _panel_plan(),
         "calendar": _calendar_cache["rows"],
         "approvals": _panel_approvals(),
     }

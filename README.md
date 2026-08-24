@@ -134,8 +134,9 @@ uv run main.py
 The chat page (`api/index.html`) is a single-file desktop UI, no build step:
 
 - Three-column layout: left rail (agent identity, transcript search, jump-to-date, today's plan, usage), center chat, right rail (today's calendar, "Waiting on you" queue). Under 1100px wide the rails hide and you get the mobile-style chat only.
-- Panels are fed by `GET /panel` (polled every 30s), which returns `{model, usage, plan, calendar, approvals}` built from `.env`'s `LLM_MODEL`, the taskbook, Google Calendar (when `ENABLE_CALENDAR=true`), and pending human-escalation tasks. `usage` is `null` until a usage-tracking backend exists, which hides the usage card.
-- Approval cards send real slash commands through the chat (e.g. `Answer` prefills `/answer <id> `).
+- Panels are fed by `GET /panel` (polled every 30s), returning `{model, usage, plan, calendar, approvals}`: the model from the Claude Code settings (or `LLM_MODEL`), the 5-hour/7-day windows and buffer count from the usage connector (when `ENABLE_CLAUDE_CODE=true`, otherwise the usage card hides), today's journal picks (when `ENABLE_JOURNAL=true`), Google Calendar anchored at local midnight so finished events render dimmed (when `ENABLE_CALENDAR=true`), and the "Waiting on you" queue: parked email/SMS approvals (Send / Change / Drop), coding-agent offers (Start / Dismiss, with a link to the to-do in Vikunja) and pending human-escalation questions.
+- All cards act through real slash commands in the chat (`/approve`, `/tweak`, `/reject`, `/aicode`, `/stopcode`, `/answer`).
+- With `ENABLE_MODEL_WATERMARK=true` the `· model` signature on each message is lifted into the sender line ("Capy (sonnet-5) · 09:41") instead of showing in the bubble.
 - If the backend is unreachable, a demo transcript and demo panels render so the layout is still reviewable.
 
 To reach it from other devices (e.g. over Tailscale), set `CHAT_API_BIND_HOST=0.0.0.0` in `.env` and open port 8000 on that machine's IP.

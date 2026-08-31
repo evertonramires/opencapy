@@ -19,7 +19,7 @@ import os
 import re
 
 import requests
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 
 _agent_header = "<p>🤖 <b>dsh agent</b></p>"
 _agent_marker = "<!-- dsh-agent -->"
@@ -27,7 +27,7 @@ _capy_marker = "<!-- capy -->"
 _capy_header = "<p>🐹 <b>Capy</b></p>"
 _timeout_seconds = 15
 
-mcp = FastMCP("vikunja")
+mcp = MCPServer("vikunja")
 
 def _api_url(path: str) -> str:
     host = os.environ["VIKUNJA_API_HOST"].strip().rstrip("/")

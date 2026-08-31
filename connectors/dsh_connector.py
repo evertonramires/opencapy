@@ -38,13 +38,15 @@ def _write_json(path: str, data: dict) -> None:
         json.dump(data, f)
 
 def _bootstrap_cookie() -> str:
-    """Fetches a fresh auth cookie. DSH_COOKIE in .env wins when set — the manual
-    escape hatch for when ssh to the dsh host isn't trusted. Otherwise the launch
-    token is grepped out of the dsh host's own journal over ssh and exchanged for
-    the cookie; the exchange must hit the same authority as DSH_URL, because the
-    cookie is bound to the Host header it was minted against."""
+    """Fetches a fresh auth cookie. A DSH_COOKIE from .env is used once — the manual
+    escape hatch for when ssh to the dsh host isn't trusted — but never twice in a
+    row: if it is the cookie that just got rejected, falling back to it again would
+    loop forever, so the ssh path gets its turn. There the launch token is grepped
+    out of the dsh host's own journal and exchanged for the cookie; the exchange
+    must hit the same authority as DSH_URL, because the cookie is bound to the Host
+    header it was minted against."""
     manual = os.getenv("DSH_COOKIE", "").strip()
-    if manual:
+    if manual and manual != _cookie():
         _write_json(_cookie_path, {"cookie": manual, "at": time.time()})
         return manual
     ssh_host = os.getenv("DSH_SSH_HOST", "").strip()

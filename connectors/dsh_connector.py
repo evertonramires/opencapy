@@ -173,7 +173,7 @@ def start_task_session(todo_id: int, title: str, description: str = "", thread: 
     if not session_id:
         return {"status": "error", "tool": "dsh", "message": "dsh created a session but didn't say which.", "details": created.get("value")}
     name = f"#{todo_id} {title}"[:60]
-    _rpc("session/rename", {"request": {"sessionId": session_id, "name": name}})
+    _rpc("session/rename", {"request": {"sessionId": session_id, "title": name}})
     model = os.getenv("DSH_MODEL", "").strip()
     if model:
         _rpc("session/selectModel", {"request": {

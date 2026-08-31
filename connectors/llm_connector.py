@@ -91,8 +91,11 @@ def _load_tools_from_disk() -> tuple[list[dict], dict]:
 
 
 def prompt_model(text: str, tools=None, tool_handlers=None, host=None, key=None, model=None, claude_model=None, _allow_fallback=True) -> str:
+    # An explicit host/model override means the caller chose its backend — the
+    # research tier picking claude-bridge, blacksmith picking its own — and the
+    # Claude Code CLI must not hijack that choice.
     # Above the usage threshold the Claude window is saved for buffered work, so chat uses the configured LLM
-    if _allow_fallback and claude_code_enabled() and not buffering_active():
+    if _allow_fallback and not host and not model and claude_code_enabled() and not buffering_active():
         try:
             result = prompt_claude_code(text, model=claude_model, use_tools=bool(tools), original_prompt=_extract_original_user_prompt(text))
             record_model_used(last_cli_model())

@@ -557,6 +557,9 @@ if __name__ == "__main__":
                                     print(f"⚠️ Autopilot: couldn't read to-do {job['todo_id']}, will retry.")
                             else:
                                 todo = todo["todo"]
+                                # Research jobs get the research tier — the stronger
+                                # claude-bridge model — while ordinary chatter stays
+                                # on the default (qwen via bifrost) chain
                                 response = prompt(
                                     "[system] Autopilot. You took this to-do on yourself, now do the work.\n\n"
                                     f"To-do {todo['id']}: {todo['title']}\n"
@@ -567,7 +570,8 @@ if __name__ == "__main__":
                                     "If the next step is outward facing, like an email or a message to someone, draft it with the right tool "
                                     "so it goes to the user for approval, and never send it yourself. "
                                     "Then reply with at most two short sentences: what you found, and the one small thing they do next. "
-                                    "No preamble, no recap of what you searched."
+                                    "No preamble, no recap of what you searched.",
+                                    tier="research",
                                 )
                                 if response.startswith("⚠️ Failed communicating"):
                                     if fail_job(job["id"]):

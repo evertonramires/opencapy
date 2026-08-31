@@ -45,7 +45,19 @@ def load_time_info():
     current_time = connector_get_time("utc")
     return current_time, timezone
     
-def prompt(text: str) -> str:
+def _tier_overrides(tier: str) -> dict:
+    """Backend overrides for a named model tier. The only tier today is
+    'research': Vikunja research jobs get their own (stronger) model, configured
+    by RESEARCH_LLM_*, while everything else rides the default chain. An
+    unconfigured tier falls back to the default chain rather than failing."""
+    if tier == "research":
+        host = os.getenv("RESEARCH_LLM_API_HOST", "").strip()
+        model = os.getenv("RESEARCH_LLM_MODEL", "").strip()
+        if host and model:
+            return {"host": host, "key": os.getenv("RESEARCH_LLM_API_KEY", ""), "model": model}
+    return {}
+
+def prompt(text: str, tier: str = "") -> str:
     identity = load_identity()
     system_prompt = load_system_prompt()
     memory = read_memory()
@@ -54,7 +66,7 @@ def prompt(text: str) -> str:
     current_time, timezone = load_time_info()
     tools, handlers = _load_tools()
     full_prompt = f"System Rules:\n{system_prompt}\n\nYour Identity:\n{identity}\n\nYour Memory:\n{memory_text}\n\nYour Notes:\n{notes}\n\nCurrent system UTC time: {current_time}[UTC], User timezone:{timezone}\n\nPrompt:\n{text}"
-    response = prompt_model(full_prompt, tools=tools, tool_handlers=handlers)
+    response = prompt_model(full_prompt, tools=tools, tool_handlers=handlers, **_tier_overrides(tier))
     add_memory(connector_get_time("utc"), text, "user")
     add_memory(connector_get_time("utc"), response, "you")
     prune_memory(memory_length_messages)

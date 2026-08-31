@@ -106,7 +106,7 @@ add_todo_tool = {
                 },
                 "project_id": {
                     "type": "integer",
-                    "description": "Optional Vikunja project id. Almost always leave this as 0: new to-dos belong in the Inbox, and triage_todo is what moves one into a box. Use list_todo_projects to find project ids.",
+                    "description": "Optional Vikunja project id. Almost always leave this as 0: every to-do lives in the Inbox, and triage_todo tags it into a box.",
                 },
                 "allow_duplicate": {
                     "type": "boolean",
@@ -365,7 +365,7 @@ if triage_enabled():
                 "about forward, or there are real consequences if it never happens; a task can be loud and still not be important. URGENT "
                 "means there is time pressure on it right now, a deadline, an appointment, something that expires or blocks someone else; "
                 "a task can matter enormously and not be urgent at all, and those are the ones that quietly never get done. The two answers "
-                "pick the quadrant, which is both the project the to-do moves to and a tag on it.\n"
+                "pick the quadrant, which becomes a tag on the to-do — every to-do stays in the Inbox, the tags are the boxes.\n"
                 "SECOND SCREENING — what to do about it: 'do', 'schedule', 'delegate' or 'drop', its own tag. It usually follows the "
                 "quadrant — urgent+important tends to be do, important-not-urgent schedule, urgent-not-important delegate, neither drop — "
                 "but screen it separately and never force the mapping: an urgent and important task the user can't do themselves is still "
@@ -376,8 +376,9 @@ if triage_enabled():
                 "via update_todo rather than a label. If it would take under two minutes, label it 'two-minute' and don't route it to "
                 "anyone, doing it is cheaper than delegating it.\n"
                 "For the second question, ALWAYS ask explicitly: could an AI do this task or its next concrete step? Research, drafting, "
-                "comparing options or prices, gathering links or contact details, summarizing, planning, writing code or documents — most "
-                "knowledge work qualifies, and 'ai-can-do' applies even when the user must act on the result afterwards. Only skip it when "
+                "comparing options or prices, gathering links or contact details, summarizing or planning is 'ai-can-research'; anything "
+                "needing code written or changed, a repo, shell commands or one of the user's machines is 'ai-can-code' — a /start comment "
+                "on the task hands those to an agent. Both apply even when the user must act on the result afterwards; only skip them when "
                 "the task genuinely needs their body, wallet, memory or personal taste. 'hire-out' and 'buy-instead' cover the human and "
                 "product versions of the same question.\n"
                 "'drop' and 'not-needed' are proposals, not decisions: they raise a button for the user and you must never delete anything "
@@ -412,12 +413,12 @@ if triage_enabled():
                         "items": {
                             "type": "string",
                             "enum": [
-                                "not-needed", "ai-can-do", "hire-out", "buy-instead", "project", "two-minute",
+                                "not-needed", "ai-can-research", "ai-can-code", "hire-out", "buy-instead", "project", "two-minute",
                                 "low-energy", "deep-focus", "@computer", "@home", "@errands", "@calls", "@waiting-for",
                             ],
                         },
                         "description": (
-                            "'ai-can-do' is screened on every task per the rule above and doesn't count against the limit of three. "
+                            "'ai-can-research' and 'ai-can-code' are screened on every task per the rule above and don't count against the limit of three. "
                             "The rest only when clearly true: 'project' means it needs more than one step, so follow it with add_subtasks. "
                             "'two-minute' means it is faster to just do than to plan. 'low-energy' is doable while depleted, 'deep-focus' "
                             "needs a good head — never guess a context or an energy level you have no evidence for. The @ labels are where "
@@ -504,7 +505,7 @@ list_todo_projects_tool = {
     "type": "function",
     "function": {
         "name": "list_todo_projects",
-        "description": "List the Vikunja projects with their ids. The Inbox holds everything not yet sorted, and there is a project per quadrant (Urgent and important, Not urgent and important, Urgent and not important, Not urgent and not important) that triage_todo files things into.",
+        "description": "List the Vikunja projects with their ids. Every to-do lives in the Inbox now — the quadrant tags are the boxes — so this is almost always just the Inbox.",
         "parameters": {
             "type": "object",
             "properties": {},

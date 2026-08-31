@@ -45,7 +45,8 @@ from connectors.vikunja_connector import (
     weekly_wins,
 )
 from connectors.autopilot_connector import autopilot_enabled, cancel_work, fail_job, finish_job, next_job, queue_work
-from connectors.coder_connector import accept_coding_offer, coder_enabled, start_next_coding_job, stop_coding_work, stop_report_html, sweep_interrupted_jobs
+from connectors.coder_connector import coder_enabled, start_next_coding_job, sweep_interrupted_jobs
+from connectors.dsh_connector import dsh_enabled, start_task_session, steer_task_session, stop_task_session
 from connectors.journal_connector import evening_journal_due, get_plan, journal_enabled, mark_evening_sent
 from connectors.approval_connector import expired_approvals
 from connectors.sprint_connector import due_sprints, mark_checked_in
@@ -112,6 +113,7 @@ if __name__ == "__main__":
             "hood/approvals.json": '{"approvals": []}',
             "hood/autopilot.json": '{"queue": []}',
             "hood/coder.json": '{"offers": [], "queue": []}',
+            "hood/dsh_sessions.json": '{}',
             "hood/journal.json": '{"days": {}}',
             "hood/sprints.json": '{"sprints": []}',
             "hood/claude_code.json": '{"model": "", "effort": "", "notified_for_reset": 0}',
@@ -204,10 +206,10 @@ if __name__ == "__main__":
                                 ) if subtasks_enabled() else ""
                                 # Triage rides along with the acknowledgement instead of costing a second call
                                 coder_hint = (
-                                    "If instead it needs writing or changing code, a repo, shell commands, or one of the user's machines, call "
-                                    "offer_coding_work with one concrete sentence of the outcome — that only raises a button, the user starts it, "
-                                    "and you must never present it as already running. "
-                                ) if coder_enabled() else ""
+                                    "If instead it needs writing or changing code, a repo, shell commands, or one of the user's machines, "
+                                    "label it 'ai-can-code' in the triage call and mention in passing that commenting /start on the task "
+                                    "puts an agent on it — never start anything yourself and never present it as already running. "
+                                ) if dsh_enabled() else ""
                                 autopilot_hint = (
                                     "If you could genuinely move one of these forward on your own, finding a phone number or address, checking opening "
                                     "hours, comparing options or prices, gathering links, drafting a message, then call queue_task_work with its id and "
@@ -228,9 +230,10 @@ if __name__ == "__main__":
                                     "Call triage_todo once for each of these: screen urgent and important separately to pick its box, then "
                                     "decide the action (do/schedule/delegate/drop) as its own second question, since the two don't always "
                                     "agree. Mention the box in a few words, as a note not a verdict, and never explain the whole method back "
-                                    "to them. Screen every task for 'ai-can-do' — research, drafting, comparing, gathering, summarizing, most "
-                                    "knowledge work qualifies even when they act on the result afterwards — and when you could genuinely do it "
-                                    "alone, queue it with queue_task_work in the same breath. If it comes out 'drop' or "
+                                    "to them. Screen every task for whether an AI could take it: 'ai-can-research' for research, drafting, "
+                                    "comparing, gathering or summarizing — and when you could genuinely do it alone, queue it with "
+                                    "queue_task_work in the same breath — or 'ai-can-code' when it needs code, a repo, shell commands or one "
+                                    "of the user's machines, which a /start comment on the task hands to an agent. If it comes out 'drop' or "
                                     "'not-needed', say so gently and leave it entirely up to them, a button will be offered and you must not delete "
                                     "anything yourself. If it comes out 'two-minute', say it's probably faster to just do than to plan. "
                                     f"{pomodoro_hint}"
@@ -303,14 +306,17 @@ if __name__ == "__main__":
                                     # /start and /stop are comment commands, matched here
                                     # mechanically: no model ever sits between the user's
                                     # panic button and the kill, or between their go and
-                                    # the shell-holding agent starting
-                                    commands = {plain_comment_text(c).strip().lower() for c in thread["new_comments"]}
-                                    if "/stop" in commands:
-                                        stopped = stop_coding_work(todo["id"])
+                                    # the agent starting. Matched as prefixes, so
+                                    # "/start focus on the API first" works and whatever
+                                    # follows the command rides along as instructions.
+                                    new_texts = [plain_comment_text(c).strip() for c in thread["new_comments"]]
+                                    start_texts = [text for text in new_texts if text.lower().startswith("/start")]
+                                    if any(text.lower().startswith("/stop") for text in new_texts):
+                                        stopped = stop_task_session(todo["id"])
                                         research_cancelled = cancel_work(todo["id"])
                                         if stopped.get("status") == "success":
-                                            add_todo_comment(todo["id"], stop_report_html(stopped))
-                                            send_message(f"⏹ Stopped the coding work on '{todo['title']}', status is in the task's comments.")
+                                            add_todo_comment(todo["id"], f"<p>⏹ Stopped the agent session <b>{stopped['name']}</b>. Nothing more runs for this task.</p>")
+                                            send_message(f"⏹ Stopped the dsh agent on '{todo['title']}'.")
                                         elif research_cancelled:
                                             add_todo_comment(todo["id"], "<p>⏹ Stopped: the queued research was cancelled before it ran. Nothing was changed.</p>")
                                             send_message(f"⏹ Cancelled the queued research on '{todo['title']}'.")
@@ -318,18 +324,37 @@ if __name__ == "__main__":
                                             add_todo_comment(todo["id"], "<p>⏹ Nothing was running or queued for this task.</p>")
                                         mark_comments_seen(todo["id"], thread["seen"])
                                         continue
-                                    if "/start" in commands:
-                                        accepted = accept_coding_offer(todo["id"])
-                                        if accepted.get("status") == "success":
-                                            started = start_next_coding_job(send_message)
-                                            note = "started" if started else "queued and starts as soon as there's room"
-                                            add_todo_comment(todo["id"], f"<p>🧑‍💻 Coding agent {note}: {accepted['goal']}</p><p>Comment /stop here to pull the plug.</p>")
-                                            send_message(f"🧑‍💻 Coding agent {note} on '{todo['title']}'.")
+                                    if start_texts:
+                                        extra = start_texts[-1][len("/start"):].strip()
+                                        if dsh_enabled():
+                                            started = start_task_session(todo["id"], todo["title"], todo["description"], thread["thread"], extra)
+                                            if started.get("status") == "success":
+                                                note = "was already on it, passed your comment along" if started.get("existing") else "started"
+                                                add_todo_comment(todo["id"], (
+                                                    f"<p>🧠 Agent session <b>{started['name']}</b> {note} — "
+                                                    f"watch it at <a href=\"{started['link']}\">{started['link']}</a> (it's in the sidebar under that name).</p>"
+                                                    "<p>Comment here to steer it, /stop to cancel.</p>"
+                                                ))
+                                                send_message(f"🧠 dsh agent {note} on '{todo['title']}'.")
+                                            else:
+                                                # Marked seen anyway: a broken dsh would otherwise retry
+                                                # forever on its own, and a fresh /start comment retries
+                                                add_todo_comment(todo["id"], f"<p>⚠️ Couldn't start the dsh agent: {started.get('message')}</p><p>Comment /start again to retry.</p>")
+                                                send_message(f"⚠️ Couldn't start the dsh agent on '{todo['title']}': {started.get('message')}")
                                         elif autopilot_enabled():
-                                            queue_work(todo["id"], "Advance this to-do as far as you can alone: research what is needed and write your findings into it.")
+                                            queue_work(todo["id"], f"Advance this to-do as far as you can alone: research what is needed and write your findings into it. {extra}".strip())
                                             add_todo_comment(todo["id"], "<p>🔎 On it — I'll write what I find into this task. Comment /stop to cancel.</p>")
                                         else:
-                                            add_todo_comment(todo["id"], "<p>There's no coding offer on this task and autopilot is off, so nothing to start.</p>")
+                                            add_todo_comment(todo["id"], "<p>The dsh agent and autopilot are both off, so nothing to start. Set ENABLE_DSH=true in .env.</p>")
+                                        mark_comments_seen(todo["id"], thread["seen"])
+                                        continue
+                                    # A plain comment on a task with a live agent session is
+                                    # steering for that agent, not a conversation with Capy —
+                                    # forwarded verbatim so the user drives the work from the
+                                    # task thread without opening dsh
+                                    forwarded = steer_task_session(todo["id"], " ".join(new_texts))
+                                    if forwarded.get("status") == "success":
+                                        send_message(f"🧠 Passed your comment on '{todo['title']}' to the dsh agent.")
                                         mark_comments_seen(todo["id"], thread["seen"])
                                         continue
                                     response = deferred_prompt(
@@ -487,8 +512,8 @@ if __name__ == "__main__":
                     balance = weekly_quadrant_balance()
                     if isinstance(balance, dict):
                         response = deferred_prompt(
-                            "[system] Weekly balance check on the user's four boxes, which are projects in Vikunja. Open to-dos per box right now: "
-                            f"{json.dumps(balance['counts'])}, plus {balance['untriaged']} still sitting in the Inbox unsorted. Last week's numbers were "
+                            "[system] Weekly balance check on the user's four boxes, which are quadrant labels in Vikunja. Open to-dos per box right now: "
+                            f"{json.dumps(balance['counts'])}, plus {balance['untriaged']} still unsorted with no box label. Last week's numbers were "
                             f"{json.dumps(balance['last_week'])}. The thing worth noticing is the direction of travel, not the totals: "
                             "'schedule' (important but not urgent) growing is the healthy sign, and a big 'do' pile means they're living in "
                             "firefights. Two or three sentences, curious rather than scored, no advice unless one number really stands out. "

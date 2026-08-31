@@ -18,7 +18,7 @@ from connectors.calendar_connector import (
 from connectors.vikunja_connector import (
     add_todo,
     add_todo_comment,
-    configure_triage_projects,
+    configure_triage,
     list_todos,
     complete_todo,
     delete_todo,
@@ -523,12 +523,12 @@ def read_messages():
                     send_message(f"Usage: /retitle <todo_id>. Details: {e}")
             elif _is_command(message, "/triagesetup"):
                 try:
-                    result = configure_triage_projects()
+                    result = configure_triage()
                     if result.get("status") != "success":
                         send_message(f"Sorry, I couldn't set your boxes up. {result.get('message')}")
                         continue
-                    retired = "\nThe old Eisenhower board is gone, the projects say the same thing now." if result["retired_board"] else ""
-                    send_message("🧭 Your four boxes are live in Vikunja as projects: " + " · ".join(result["projects"]) + retired)
+                    retired = "\nThe old Eisenhower board is gone, the labels say the same thing now." if result["retired_board"] else ""
+                    send_message(f"🧭 Your triage tags are live in Vikunja ({result['labels']} labels). Everything stays in the Inbox; the quadrant tags are the boxes." + retired)
                 except Exception as e:
                     send_message(f"Sorry, I couldn't set your boxes up, can we try again? Details: {e}")
             elif _is_command(message, "/triage"):

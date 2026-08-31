@@ -177,7 +177,7 @@ To-dos (Vikunja):
 - The to-do features are designed to be ADHD-friendly: capturing is instant (no interrogation about details), and starting is helped by `/focus`, which picks exactly one to-do and suggests a first step small enough to take two minutes, offering a check-in afterwards.
 - Optional: `VIKUNJA_DAILY_FOCUS_HOUR` (24h UTC hour, -1 disables) sends one gentle morning message with up to 3 to-dos that matter today and a suggested starter — never the whole list.
 - Optional: `VIKUNJA_DATE_NUDGE_HOUR` (24h UTC hour, -1 disables) sends one daily message listing to-dos without a due date; reply with rough dates ("friday", "next week") and the agent sets them, keeping Vikunja's Gantt timeline useful.
-- Optional: with `ENABLE_TODO_TRIAGE=true` every incoming to-do is sorted into the four urgent/important boxes and labelled with what else is true about it; run `/triagesetup` once to create the tags and a project per box. `VIKUNJA_DEFAULT_PROJECT_ID` then means strictly the unsorted Inbox. A weekly message reports how the boxes are shifting, on the same `WEEKLY_REVIEW_DAY` schedule as the stale sweep.
+- Optional: with `ENABLE_TODO_TRIAGE=true` every incoming to-do is tagged into one of the four urgent/important boxes and labelled with what else is true about it; run `/triagesetup` once to create the tags. Every to-do stays in the Inbox project (`VIKUNJA_DEFAULT_PROJECT_ID`) — the quadrant tags are the boxes, and a to-do without one is unsorted. A weekly message reports how the boxes are shifting, on the same `WEEKLY_REVIEW_DAY` schedule as the stale sweep.
 - Optional: with `ENABLE_TODO_DEDUPE=true` the same thing written down twice stops becoming two to-dos. Every capture is matched against the whole list first — on meaning, not on wording, so "dentist" finds "Call the dentist about the cleaning" and accents, plurals and typos don't hide a match. When one already exists nothing is created: the agent merges whatever the second telling added (a detail, a date, a name, a better phrasing) into the to-do you already have as a dated line, or just tells you where it already is. A to-do you finished in the last `TODO_DUPLICATE_DONE_DAYS` still counts, so a chore you just did doesn't quietly come back. `TODO_DUPLICATE_THRESHOLD` (0 to 1, defaults to 0.55) sets how alike two to-dos have to read; it leans towards catching too much rather than too little, because the refused capture is always offered straight back with an **Add it anyway** button. To-dos written directly in Vikunja are checked too, and come with a **Merge into** button instead, since by then the second one exists.
 - Optional: with `ENABLE_VIKUNJA_SUBTASKS=true` the agent breaks multi-step to-dos into steps (on its own or when asked), written as a tickable checklist inside that to-do's own description. The steps stay inside the task rather than becoming separate to-dos, so the list never gets longer — a list that doubles in length is the thing that makes you stop opening it. Tick the boxes in the Vikunja app and the to-do's progress bar fills on its own.
 
@@ -314,14 +314,12 @@ project in disguise, whether it's a two-minute job, and what it needs from you t
 done. A "drop" verdict is only ever offered as a button; Capy never deletes anything
 on its own.
 
-Run `/triagesetup` once and each quadrant becomes **its own project** — ☸️ Urgent and
-important, 🌱 Not urgent and important, 🔥 Urgent and not important, 🍂 Not urgent and
-not important — leaving the Inbox as strictly the pile of things not yet sorted, so
-its length tells you how far behind triage is. Filing a to-do moves it into that
-project and Vikunja files the card into that project's own To-Do / Doing / Done board.
-The quadrant is also kept as a matching tag, so future views can filter or sort on
-tags alone. Re-running `/triagesetup` after an update renames existing projects and
-labels **in place** — tasks, views and label assignments are all kept.
+Run `/triagesetup` once and the quadrant tags are created — ☸️ urgent and important,
+🌱 not urgent and important, 🔥 urgent and not important, 🍂 not urgent and not
+important. Every to-do lives in the Inbox project; the tags are the boxes, so views
+filter or sort on tags alone and a to-do without a quadrant tag is by definition not
+yet sorted. Re-running `/triagesetup` after an update renames existing labels **in
+place** — tasks and label assignments are all kept.
 
 With `ENABLE_TODO_POMODORO=true` every triaged to-do also gets a 🍅 tag with how many
 pomodori it should take, sized by your own rhythm (`POMODORO_MINUTES` of work,
@@ -331,10 +329,10 @@ the sum. Vikunja has no native pomodoro clock, so the tags are the annotation �
 count is the plan, your timer stays your own.
 
 ```code
-/triagesetup - create the tags and the four quadrant projects in Vikunja
+/triagesetup - create the triage tags in Vikunja
 /triage 12 - sort to-do 12 into a quadrant
-/triageall - sort everything still in the Inbox
-/quadrant 12 not-urgent-important - move to-do 12 to another quadrant by hand
+/triageall - sort everything not yet tagged with a quadrant
+/quadrant 12 not-urgent-important - retag to-do 12 to another quadrant by hand
 /action 12 delegate - change what to do about to-do 12 without moving it
 ```
 
@@ -363,42 +361,36 @@ It only takes on things it can genuinely do alone (finding a phone number, check
 opening hours, comparing prices, gathering links, drafting a message). It is capped at
 `AUTOPILOT_MAX_PER_DAY` and pauses entirely while the usage window is nearly spent.
 
-Coding agent (`ENABLE_CODER=true`, needs `ENABLE_CLAUDE_CODE`):
+dsh agent (`ENABLE_DSH=true`):
 
-The other half of the ai-can-do split. Research Capy handles itself through autopilot;
-when a to-do instead needs code written or changed, a repo, shell commands, or one of
-your machines, Capy **offers** a Claude Code agent with a button on the triage message
-— and that offer is the whole of what happens on its own. **The agent runs the real
-Claude Code CLI with shell access and permission prompts bypassed, on this machine and
-over SSH to anything `CODER_NOTES` names — which is exactly why nothing ever starts
-until you tap the button (or type `/aicode <id>`), and why `CODER_MAX_PER_DAY`
-(default 2) exists.** Jobs run one at a time on a background thread, each in its own
-subdirectory of `CODER_WORKDIR`, with `CODER_TIMEOUT_SECONDS` (default an hour) to
-finish. The report lands in the to-do under a "🧑‍💻 Coding agent" heading, in its
-comment thread, and as a chat message. Describe your machines in `CODER_NOTES` (names,
-ssh aliases, what lives where) and set up the SSH keys yourself, once — the agent only
-uses hosts the notes name. A job interrupted by a restart goes back in the queue and
-says so.
+The other half of the AI split. Research (`ai-can-research`) Capy handles itself
+through autopilot; when a to-do instead needs code written or changed, a repo, shell
+commands, or one of your machines (`ai-can-code`), **you** hand it to a
+[dsh](https://github.com/deepseek-ai/deepseek-harness) agent by commenting on the
+task itself. The two comment commands are matched **mechanically** by the watcher —
+no model sits between you and them, which is what makes them safe as a start switch
+and a panic button (they act on the watcher's next pass, so within
+`VIKUNJA_WATCH_INTERVAL_SECONDS`):
 
-You can also drive it from inside Vikunja, by commenting on the task itself. These two
-comments are matched **mechanically** by the watcher — no model sits between you and
-them, which is what makes them safe as a start switch and a panic button (they act on
-the watcher's next pass, so within `VIKUNJA_WATCH_INTERVAL_SECONDS`; from Telegram,
-`/stopcode` is immediate):
+- comment `/start` — spawns a dsh session named `#<id> <title>`, primed with the
+  task, its description and its comment thread; anything after the command
+  (`/start focus on the API first`) rides along as instructions. Capy replies in the
+  thread with the link to dsh, where the session sits in the sidebar under that name.
+- comment anything else while the session lives — it is forwarded into the session
+  verbatim as steering, so you drive the agent from the task thread
+- comment `/stop` — cancels the session (or queued research when there is no session)
 
-- comment `/start` — starts the offered coding agent on that task, or queues research
-  when there's no coding offer
-- comment `/stop` — the panic button: kills the running agent (its whole process
-  group, ssh sessions included), or cancels the queued job, offer, or queued research.
-  It leaves a status comment on the task with how long it ran and what its working
-  directory holds, and is explicit that interrupted work — especially anything over
-  ssh — should be checked, not trusted
+The agent runs with the `vikunja` preset (`DSH_AGENT_PRESET`), which carries MCP tools
+to read the task, post comments — progress, questions, the final summary — and poll
+the thread for your replies, so the whole conversation stays on the card. `DSH_URL`
+is the RPC endpoint, `DSH_PUBLIC_URL` the link put in comments, `DSH_CWD` the
+session's working directory, and `DSH_MODEL`/`DSH_MODEL_PROVIDER` optionally pick a
+stronger model than the dsh default. Auth is a cookie bootstrapped over ssh
+(`DSH_SSH_HOST`) from the dsh host's journal — or paste one into `DSH_COOKIE`
+yourself. Sessions are tracked in `hood/dsh_sessions.json`, one per task.
 
-```code
-/aicode 12 - start the offered coding agent on to-do 12
-/stopcode - stop whatever coding job is running right now
-/stopcode 12 - stop or cancel the coding work on to-do 12
-```
+The older Claude Code coder (`ENABLE_CODER=true`, `/aicode`, `/stopcode`) still
+exists but is dormant by default now that /start goes to dsh.
 
 Journal (`ENABLE_JOURNAL=true`):
 

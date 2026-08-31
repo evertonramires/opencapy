@@ -19,7 +19,7 @@ if coder_enabled():
         "function": {
             "name": "offer_coding_work",
             "description": (
-                "Offer to put a Claude Code coding agent on a to-do. Use this for the ai-can-do tasks that plain research can't cover: "
+                "Offer to put a Claude Code coding agent on a to-do. Use this for the ai-can-code tasks that plain research can't cover: "
                 "writing or changing code, working in a repo, running shell commands, or doing anything on one of the user's machines. "
                 "Plain research — finding facts, comparing options, drafting text — stays with queue_task_work and needs no offer. "
                 "This tool only OFFERS: a button goes to the user and absolutely nothing runs until they tap it, because the coding agent "

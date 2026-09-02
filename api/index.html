@@ -387,7 +387,13 @@ async function pollMessages() {
   try {
     const res = await fetch(apiBase + "/outbox");
     const data = await res.json();
-    for (const m of data.messages) { addMessage(m, "bot"); notifyBrowser(msgPreview(m)); }
+    for (const m of data.messages) {
+      // Each entry is {message, notify}; notify is decided bot-side by the
+      // NOTIFY_* switches in .env (plain strings from older bots still work)
+      const text = typeof m === "string" ? m : m.message;
+      addMessage(text, "bot");
+      if (typeof m === "string" || m.notify) notifyBrowser(msgPreview(text));
+    }
     if (data.messages.length > 0) statusDot.style.background = "var(--color-accent)";
   } catch (e) { /* offline */ }
 }

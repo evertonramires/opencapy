@@ -22,11 +22,14 @@ base_dir = Path(__file__).resolve().parent
 app.mount("/assets", StaticFiles(directory=base_dir / "assets"), name="assets")
 
 incoming_queue: list[str] = []  # messages from client to bot
-outgoing_queue: list[str] = []  # messages from bot to client
+outgoing_queue: list[dict] = []  # messages from bot to client, each {"message", "notify"}
 notification_queue: list[str] = []  # popup notifications from bot to client, outside the transcript
 
 class MessageRequest(BaseModel):
     message: str
+    # Whether the web client should also raise a browser popup for it, decided
+    # bot-side by the NOTIFY_* switches in .env (see connectors/notification_connector.py)
+    notify: bool = True
     
 @app.get("/")
 def index():
@@ -48,7 +51,7 @@ def bot_read():
 # Bot sends a response to the client
 @app.post("/outbox")
 def bot_send(body: MessageRequest):
-    outgoing_queue.append(body.message)
+    outgoing_queue.append({"message": body.message, "notify": body.notify})
     return {"ok": True}
 
 # Client polls for bot responses

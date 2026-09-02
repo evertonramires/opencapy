@@ -2,6 +2,7 @@ import json
 import os
 from datetime import datetime, timedelta, timezone
 from connectors.api_connector import send_api_message, send_api_notification, read_api_messages
+from connectors.notification_connector import should_notify
 from connectors.telegram_connector import send_telegram_message, read_telegram_messages, send_telegram_typing_action, register_telegram_commands, edit_telegram_message
 from connectors.notebook_connector import add_note, delete_note, read_notes
 from connectors.identity_connector import read_identity, write_identity
@@ -107,7 +108,9 @@ def send_message(message: str, buttons=None) -> int | None:
     popped so a mechanical message sent right after never wears a stale signature."""
     watermark = pop_model_used()
     message_id = send_telegram_message(message, buttons, watermark=watermark)
-    send_api_message(f"{message}\n\n· {watermark}" if watermark else message)
+    # Whether this message also raises a browser popup rides along, decided here
+    # by the NOTIFY_* switches so the web client stays a dumb renderer
+    send_api_message(f"{message}\n\n· {watermark}" if watermark else message, notify=should_notify(message))
     return message_id
 
 def send_notification(message: str) -> None:

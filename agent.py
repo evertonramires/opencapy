@@ -45,16 +45,32 @@ def load_time_info():
     current_time = connector_get_time("utc")
     return current_time, timezone
     
+# Which env prefixes configure each tier's backend, in the order they win.
+# Autopilot jobs used to ride the 'research' tier, so RESEARCH_LLM_* stays as
+# their fallback and older .env files keep working unchanged.
+_TIER_PREFIXES = {
+    "autopilot": ["AUTOPILOT", "RESEARCH"],
+    "research": ["RESEARCH"],
+    "vikunja": ["VIKUNJA"],
+}
+
+
 def _tier_overrides(tier: str) -> dict:
-    """Backend overrides for a named model tier. The only tier today is
-    'research': Vikunja research jobs get their own (stronger) model, configured
-    by RESEARCH_LLM_*, while everything else rides the default chain. An
+    """Backend overrides for a named model tier, so one kind of background work can
+    run on its own model while everything else rides the default chain:
+      'autopilot' — autopilot research jobs, AUTOPILOT_LLM_* (or the older RESEARCH_LLM_*)
+      'vikunja'   — the Vikunja watcher's messages (triage, focus, comments), VIKUNJA_LLM_*
+    When the Claude Code CLI is the backend, CLAUDE_CODE_AUTOPILOT_MODEL /
+    CLAUDE_CODE_VIKUNJA_MODEL pick the CLI model for the tier instead. An
     unconfigured tier falls back to the default chain rather than failing."""
-    if tier == "research":
-        host = os.getenv("RESEARCH_LLM_API_HOST", "").strip()
-        model = os.getenv("RESEARCH_LLM_MODEL", "").strip()
+    for prefix in _TIER_PREFIXES.get(tier, []):
+        host = os.getenv(f"{prefix}_LLM_API_HOST", "").strip()
+        model = os.getenv(f"{prefix}_LLM_MODEL", "").strip()
         if host and model:
-            return {"host": host, "key": os.getenv("RESEARCH_LLM_API_KEY", ""), "model": model}
+            return {"host": host, "key": os.getenv(f"{prefix}_LLM_API_KEY", ""), "model": model}
+    claude_model = os.getenv(f"CLAUDE_CODE_{tier.upper()}_MODEL", "").strip() if tier else ""
+    if claude_model:
+        return {"claude_model": claude_model}
     return {}
 
 def prompt(text: str, tier: str = "") -> str:

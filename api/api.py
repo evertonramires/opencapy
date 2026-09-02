@@ -23,6 +23,7 @@ app.mount("/assets", StaticFiles(directory=base_dir / "assets"), name="assets")
 
 incoming_queue: list[str] = []  # messages from client to bot
 outgoing_queue: list[str] = []  # messages from bot to client
+notification_queue: list[str] = []  # popup notifications from bot to client, outside the transcript
 
 class MessageRequest(BaseModel):
     message: str
@@ -56,6 +57,20 @@ def client_read():
     messages = list(outgoing_queue)
     outgoing_queue.clear()
     return {"messages": messages}
+
+# Bot pushes a popup notification; it renders as a toast (and a browser
+# notification when the tab is hidden) rather than a chat bubble
+@app.post("/notify")
+def bot_notify(body: MessageRequest):
+    notification_queue.append(body.message)
+    return {"ok": True}
+
+# Client polls for pending popup notifications
+@app.get("/notifications")
+def client_notifications():
+    notifications = list(notification_queue)
+    notification_queue.clear()
+    return {"notifications": notifications}
 
 @app.get("/memory")
 def get_memory():

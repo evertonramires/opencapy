@@ -13,7 +13,7 @@ def _ensure_buffer():
             json.dump({"items": []}, f)
 
 
-def add_buffered(task, source) -> str:
+def add_buffered(task, source, tier="") -> str:
     _ensure_buffer()
     data = read_buffered()
     # A recurring routine fires every interval while buffering, so keep one entry per distinct task
@@ -24,7 +24,7 @@ def add_buffered(task, source) -> str:
     # Automatic buffering only happens when usage reads fine, so an unknown reset means someone asked for this
     # explicitly, and a whole window is a better guess than running it on the next heartbeat.
     run_after = window_resets_at() or int(time.time()) + WINDOW_SECONDS
-    data.append({"id": next_id, "timestamp": get_time("utc"), "source": source, "task": task, "run_after": run_after})
+    data.append({"id": next_id, "timestamp": get_time("utc"), "source": source, "task": task, "tier": tier, "run_after": run_after})
     with open(BUFFER_PATH, "w") as f:
         json.dump({"items": data}, f, indent=4)
     return f"🪫 Buffered for the next usage window: {next_id}. {task}"

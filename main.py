@@ -83,12 +83,12 @@ def heartbeat() -> bool:
         return True
     return False
 
-def deferred_prompt(text: str, source: str) -> str:
+def deferred_prompt(text: str, source: str, tier: str = "") -> str:
     # Above the usage threshold background work waits for the next window instead of burning it
     if buffering_active():
-        add_buffered(text, source)
+        add_buffered(text, source, tier)
         return ""
-    return prompt(text)
+    return prompt(text, tier=tier)
 
 if __name__ == "__main__":
     try:
@@ -274,6 +274,7 @@ if __name__ == "__main__":
                                     "Ask at most one short optional question, and only if something is clearly time-sensitive and missing a due date. "
                                     "No guilt, no lectures, no tools beyond the ones named here.",
                                     "new to-dos",
+                                    tier="vikunja",
                                 )
                                 if response.startswith("⚠️ Failed communicating"):
                                     print(f"⚠️ Vikunja watcher: LLM unavailable, will retry announcing new to-dos on the next check.")
@@ -290,6 +291,7 @@ if __name__ == "__main__":
                                     "mentioning what they finished. Finishing things is a real win worth "
                                     "celebrating. No 'what's next', no new demands, don't use tools.",
                                     "completed to-dos",
+                                    tier="vikunja",
                                 )
                                 if response.startswith("⚠️ Failed communicating"):
                                     print(f"⚠️ Vikunja watcher: LLM unavailable, will retry cheering completed to-dos on the next check.")
@@ -372,6 +374,7 @@ if __name__ == "__main__":
                                         "so the conversation stays attached to the task. Finally reply here with at most two short sentences. "
                                         "No preamble, no repeating their comment back at them.",
                                         "to-do comment",
+                                        tier="vikunja",
                                     )
                                     if response.startswith("⚠️ Failed communicating"):
                                         print(f"⚠️ Vikunja comments: LLM unavailable, will retry to-do {todo['id']} on the next check.")
@@ -414,7 +417,7 @@ if __name__ == "__main__":
                                     "small it takes two minutes. Be brief, warm and encouraging. Never mention how many tasks are pending in total, "
                                     "never guilt about overdue ones, and don't explain why you ordered them that way."
                                 )
-                            response = deferred_prompt(focus_prompt, "daily focus")
+                            response = deferred_prompt(focus_prompt, "daily focus", tier="vikunja")
                             if response.startswith("⚠️ Failed communicating"):
                                 print("⚠️ Vikunja focus: LLM unavailable, will retry on the next heartbeat.")
                             else:
@@ -458,6 +461,7 @@ if __name__ == "__main__":
                                 "answers like 'friday' or 'next week' are fine and that skipping any of them is ok. "
                                 "When they reply later, set the dates with the update_todo tool. No guilt, keep it inviting.",
                                 "date nudge",
+                                tier="vikunja",
                             )
                             if response.startswith("⚠️ Failed communicating"):
                                 print("⚠️ Vikunja date nudge: LLM unavailable, will retry on the next heartbeat.")
@@ -500,6 +504,7 @@ if __name__ == "__main__":
                                 "This is evidence against their own memory, which undercounts badly. Keep it short, "
                                 "no advice, no mention of anything still pending, no 'next week let's...'.",
                                 "weekly wins",
+                                tier="vikunja",
                             )
                             if response.startswith("⚠️ Failed communicating"):
                                 print("⚠️ Weekly wins: LLM unavailable, will retry on the next heartbeat.")
@@ -519,6 +524,7 @@ if __name__ == "__main__":
                             "firefights. Two or three sentences, curious rather than scored, no advice unless one number really stands out. "
                             "Never call it a report and never suggest they triage more.",
                             "weekly balance",
+                            tier="vikunja",
                         )
                         if response.startswith("⚠️ Failed communicating"):
                             print("⚠️ Weekly balance: LLM unavailable, will retry on the next heartbeat.")
@@ -533,7 +539,7 @@ if __name__ == "__main__":
                     if buffered:
                         # one per heartbeat, so draining a full queue doesn't immediately burn the fresh window
                         item = buffered[0]
-                        response = prompt(f"[system] This work was buffered while the usage window was full ({item['source']}, buffered at {item['timestamp']}): {item['task']}")
+                        response = prompt(f"[system] This work was buffered while the usage window was full ({item['source']}, buffered at {item['timestamp']}): {item['task']}", tier=item.get("tier", ""))
                         if response.startswith("⚠️ Failed communicating"):
                             print("⚠️ Work buffer: LLM unavailable, will retry on the next heartbeat.")
                         else:
@@ -557,9 +563,10 @@ if __name__ == "__main__":
                                     print(f"⚠️ Autopilot: couldn't read to-do {job['todo_id']}, will retry.")
                             else:
                                 todo = todo["todo"]
-                                # Research jobs get the research tier — the stronger
-                                # claude-bridge model — while ordinary chatter stays
-                                # on the default (qwen via bifrost) chain
+                                # Autopilot jobs get their own tier (AUTOPILOT_LLM_* /
+                                # CLAUDE_CODE_AUTOPILOT_MODEL, falling back to the older
+                                # RESEARCH_LLM_*) while ordinary chatter stays on the
+                                # default chain
                                 response = prompt(
                                     "[system] Autopilot. You took this to-do on yourself, now do the work.\n\n"
                                     f"To-do {todo['id']}: {todo['title']}\n"
@@ -571,7 +578,7 @@ if __name__ == "__main__":
                                     "so it goes to the user for approval, and never send it yourself. "
                                     "Then reply with at most two short sentences: what you found, and the one small thing they do next. "
                                     "No preamble, no recap of what you searched.",
-                                    tier="research",
+                                    tier="autopilot",
                                 )
                                 if response.startswith("⚠️ Failed communicating"):
                                     if fail_job(job["id"]):

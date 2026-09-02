@@ -137,6 +137,7 @@ The chat page (`api/index.html`) is a single-file desktop UI, no build step:
 - Panels are fed by `GET /panel` (polled every 30s), returning `{model, usage, plan, calendar, approvals}`: the model from the Claude Code settings (or `LLM_MODEL`), the 5-hour/7-day windows and buffer count from the usage connector (when `ENABLE_CLAUDE_CODE=true`, otherwise the usage card hides), today's journal picks (when `ENABLE_JOURNAL=true`), Google Calendar anchored at local midnight so finished events render dimmed (when `ENABLE_CALENDAR=true`), and the "Waiting on you" queue: parked email/SMS approvals (Send / Change / Drop), coding-agent offers (Start / Dismiss, with a link to the to-do in Vikunja) and pending human-escalation questions.
 - All cards act through real slash commands in the chat (`/approve`, `/tweak`, `/reject`, `/aicode`, `/stopcode`, `/answer`).
 - With `ENABLE_MODEL_WATERMARK=true` the `· model` signature on each message is lifted into the sender line ("Capy (sonnet-5) · 09:41") instead of showing in the bubble.
+- Popup notifications: every bot message raises a system (browser) notification while the tab is hidden, and the agent's own `send_notification` tool additionally pops an in-page toast — the browser asks for notification permission on your first click or keypress on the page.
 - If the backend is unreachable, a demo transcript and demo panels render so the layout is still reviewable.
 
 To reach it from other devices (e.g. over Tailscale), set `CHAT_API_BIND_HOST=0.0.0.0` in `.env` and open port 8000 on that machine's IP.
@@ -360,6 +361,13 @@ the one small next step. Anything you wrote yourself is never overwritten.
 It only takes on things it can genuinely do alone (finding a phone number, checking
 opening hours, comparing prices, gathering links, drafting a message). It is capped at
 `AUTOPILOT_MAX_PER_DAY` and pauses entirely while the usage window is nearly spent.
+
+Autopilot jobs and the Vikunja watcher's messages (triage, daily focus, comments,
+weekly digests) can each run on their own model instead of the default chain:
+set `AUTOPILOT_LLM_API_HOST/KEY/MODEL` (the older `RESEARCH_LLM_*` names still work)
+and `VIKUNJA_LLM_API_HOST/KEY/MODEL` in `.env`, or — when the backend is the Claude
+Code CLI — pick the CLI model per tier with `CLAUDE_CODE_AUTOPILOT_MODEL` and
+`CLAUDE_CODE_VIKUNJA_MODEL`. Anything left unset rides the default chain.
 
 dsh agent (`ENABLE_DSH=true`):
 

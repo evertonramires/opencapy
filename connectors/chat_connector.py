@@ -1,7 +1,7 @@
 import json
 import os
 from datetime import datetime, timedelta, timezone
-from connectors.api_connector import send_api_message, read_api_messages
+from connectors.api_connector import send_api_message, send_api_notification, read_api_messages
 from connectors.telegram_connector import send_telegram_message, read_telegram_messages, send_telegram_typing_action, register_telegram_commands, edit_telegram_message
 from connectors.notebook_connector import add_note, delete_note, read_notes
 from connectors.identity_connector import read_identity, write_identity
@@ -109,6 +109,14 @@ def send_message(message: str, buttons=None) -> int | None:
     message_id = send_telegram_message(message, buttons, watermark=watermark)
     send_api_message(f"{message}\n\n· {watermark}" if watermark else message)
     return message_id
+
+def send_notification(message: str) -> None:
+    """A notification is an interruption, not a conversation turn: the web chat pops
+    it up as a toast (and a browser notification when the tab is hidden) instead of a
+    bubble, and Telegram gets it as a plain message since its own push already rings.
+    It never enters the memory, so the next prompt doesn't see it as something said."""
+    send_telegram_message(f"🔔 {message}")
+    send_api_notification(message)
 
 def read_messages():
     messages = []

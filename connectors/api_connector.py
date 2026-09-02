@@ -17,6 +17,15 @@ def send_api_message(message: str) -> None:
     except Exception:
         print("⚠️ Failed to send message to the chat API.")
 
+def send_api_notification(message: str) -> None:
+    api_url = os.getenv("CHAT_API_HOST")
+    if not api_url:
+        return
+    try:
+        requests.post(f"{api_url}/notify", json={"message": message}, timeout=30)
+    except Exception:
+        print("⚠️ Failed to send notification to the chat API.")
+
 def read_api_messages() -> list[str]:
     api_url = os.getenv("CHAT_API_HOST")
     if not api_url:

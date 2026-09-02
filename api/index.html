@@ -135,6 +135,13 @@ a { color: var(--color-accent-300); text-underline-offset: 3px; } a:hover { colo
 .appr .actions { display: flex; gap: var(--s2); }
 .empty { font-size: 12px; color: var(--color-neutral-500); padding: 0 var(--s2); }
 
+/* Popup notifications (toasts) */
+#toasts { position: fixed; top: var(--s6); right: var(--s6); display: flex; flex-direction: column; gap: var(--s3); z-index: 50; width: min(340px, calc(100vw - 32px)); }
+.toast { display: flex; gap: var(--s3); align-items: flex-start; padding: var(--s4); background: var(--color-surface); border: 1px solid var(--color-accent-800); border-left: 3px solid var(--color-accent); border-radius: var(--radius); box-shadow: 0 8px 24px rgb(0 0 0 / 0.45); font-size: 13px; line-height: 1.5; cursor: pointer; animation: toast-in 0.18s ease-out; }
+.toast .bell { flex-shrink: 0; }
+.toast.leaving { opacity: 0; transform: translateX(8px); transition: opacity 0.2s, transform 0.2s; }
+@keyframes toast-in { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+
 @media (max-width: 1100px) { #shell { grid-template-columns: 1fr; } .rail { display: none; } }
 </style>
 </head>
@@ -206,6 +213,8 @@ a { color: var(--color-accent-300); text-underline-offset: 3px; } a:hover { colo
   </aside>
 
 </div>
+
+<div id="toasts"></div>
 
 <script>
 const apiBase = "";
@@ -378,7 +387,7 @@ async function pollMessages() {
   try {
     const res = await fetch(apiBase + "/outbox");
     const data = await res.json();
-    for (const m of data.messages) addMessage(m, "bot");
+    for (const m of data.messages) { addMessage(m, "bot"); notifyBrowser(msgPreview(m)); }
     if (data.messages.length > 0) statusDot.style.background = "var(--color-accent)";
   } catch (e) { /* offline */ }
 }
@@ -397,6 +406,49 @@ input.addEventListener("keydown", (e) => {
 input.addEventListener("input", () => { input.style.height = "auto"; input.style.height = input.scrollHeight + "px"; });
 /* History and outbox polling start after the first /panel fetch (see
    loadPanels below) so sender lines already know the model name. */
+
+/* ── Popup notifications ──────────────────────────────────────────────────
+   Two sources: every bot message raises a browser notification while the tab
+   is hidden, and the agent's own send_notification tool (GET /notifications)
+   additionally pops an in-page toast, since those are meant to interrupt. */
+const toastsBox = $("toasts");
+function showToast(text) {
+  const toast = document.createElement("div");
+  toast.className = "toast";
+  toast.innerHTML = '<span class="bell">🔔</span><span></span>';
+  toast.lastChild.textContent = text;
+  toast.addEventListener("click", () => dismissToast(toast));
+  toastsBox.appendChild(toast);
+  setTimeout(() => dismissToast(toast), 10000);
+}
+function dismissToast(toast) {
+  if (!toast.parentNode) return;
+  toast.classList.add("leaving");
+  setTimeout(() => toast.remove(), 200);
+}
+/* The permission ask needs a user gesture in most browsers, so it rides on the
+   first interaction instead of greeting the page load with a prompt */
+function requestNotifyPermission() {
+  if ("Notification" in window && Notification.permission === "default") Notification.requestPermission();
+}
+document.addEventListener("click", requestNotifyPermission, { once: true });
+document.addEventListener("keydown", requestNotifyPermission, { once: true });
+function notifyBrowser(body) {
+  if (!("Notification" in window) || Notification.permission !== "granted" || !document.hidden || !body) return;
+  const n = new Notification("Open Capy", { body, icon: "/assets/bot.png" });
+  n.onclick = () => { window.focus(); n.close(); };
+}
+function msgPreview(text) {
+  const body = text.replace(/\n\n· [^\n]+$/, "").replace(/[*`#]/g, "").trim();
+  return body.length > 140 ? body.slice(0, 140) + "…" : body;
+}
+async function pollNotifications() {
+  try {
+    const res = await fetch(apiBase + "/notifications");
+    const data = await res.json();
+    for (const text of data.notifications) { showToast(text); notifyBrowser(text); }
+  } catch (e) { /* offline */ }
+}
 
 /* ── Commands palette ─────────────────────────────────────────────────── */
 const commandsPanel = $("commands-panel");
@@ -493,7 +545,9 @@ async function loadPanels() {
 loadPanels().then(() => {
   loadHistory();
   pollMessages();
+  pollNotifications();
   setInterval(pollMessages, 3000);
+  setInterval(pollNotifications, 3000);
 });
 setInterval(loadPanels, 30000);
 
